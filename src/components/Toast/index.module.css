@@ -1,0 +1,87 @@
+.container {
+    visibility: hidden;
+}
+
+.container_show {
+    visibility: visible;
+    margin-left: -125px;
+    border-radius: 6px;
+    min-width: 250px;
+
+    position: fixed;
+    z-index: 1;
+    right: 5%;
+    top: 30px;
+    /* Show the snackbar */
+    /* Add animation: Take 0.5 seconds to fade in and out the snackbar.
+    However, delay the fade out process for 2.5 seconds */
+    -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
+    animation: fadein 0.5s, fadeout 0.5s 2.5s;
+}
+
+.danger {
+    background-color: var(--danger);
+    color: var(--gray-100);
+    text-align: center;
+    padding: 16px;
+    border-radius: 6px;
+}
+
+.success {
+    background-color: var(--purple-dark);
+    color: var(--gray-100);
+    text-align: center;
+    padding: 16px;
+    border-radius: 6px;
+
+}
+
+
+/* Animations to fade the snackbar in and out */
+@-webkit-keyframes fadein {
+    from {
+        top: 0;
+        opacity: 0;
+    }
+
+    to {
+        top: 30px;
+        opacity: 1;
+    }
+}
+
+@keyframes fadein {
+    from {
+        top: 0;
+        opacity: 0;
+    }
+
+    to {
+        top: 30px;
+        opacity: 1;
+    }
+}
+
+@-webkit-keyframes fadeout {
+    from {
+        top: 30px;
+        opacity: 1;
+    }
+
+    to {
+        bottom: 0;
+        opacity: 0;
+    }
+}
+
+@keyframes fadeout {
+    from {
+        top: 30px;
+        opacity: 1;
+    }
+
+    to {
+        top: 0;
+        opacity: 0;
+    }
+}

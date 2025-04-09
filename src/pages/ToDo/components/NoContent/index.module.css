@@ -1,0 +1,21 @@
+.section_container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    flex-direction: column;
+
+
+    height: 244px;
+
+    border-top: 1px solid var(--gray-400);
+    border-radius: 8px;
+}
+
+.text {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    color: var(--gray-300);
+}

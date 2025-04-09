@@ -1,0 +1,35 @@
+.container {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    height: 100vh;
+    background-color: var(--blue-dark);
+    gap: 40px;
+}
+
+.title_container {
+    min-width: 1440px;
+}
+
+h1 {
+    font-style: normal;
+    font-weight: 700;
+    font-size: 124px;
+    margin: 0;
+
+    color: var(--gray-100);
+}
+
+h2 {
+    font-style: normal;
+    font-weight: 400;
+    font-size: 60px;
+
+    margin: 0;
+    color: var(--gray-100);
+}
+
+img {
+    width: auto;
+}
