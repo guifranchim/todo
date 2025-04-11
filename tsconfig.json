@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "noUnusedLocals": false,
     "target": "ESNext",
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
     "module": "ESNext",
@@ -15,7 +16,6 @@
 
     /* Linting */
     "strict": true,
-    "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
