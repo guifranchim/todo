@@ -47,7 +47,7 @@ jobs:
       - name: Testar Conexão com Bastion
         uses: appleboy/ssh-action@v0.1.7
         with:
-          host: ${{ secrets.HOST_BASTION }}
+          host: ${{ env.HOST_BASTION }}
           username: ec2-user
           key: ${{ secrets.PEM }}
           script: |
@@ -56,10 +56,10 @@ jobs:
       - name: Atualizar Container Frontend via Bastion
         uses: appleboy/ssh-action@v0.1.7
         with:
-          host: ${{ secrets.HOST_FRONT }}
+          host: ${{ env.HOST_FRONT }}
           username: ec2-user
           key: ${{ secrets.PEM }}
-          proxy_host: ${{ secrets.HOST_BASTION }}
+          proxy_host: ${{ env.HOST_BASTION }}
           script: |
             docker pull ${{ env.IMAGE_NAME_FRONT }}:${{ env.TAG }}
             docker rm -f container_front || true
@@ -68,10 +68,10 @@ jobs:
       - name: Atualizar Container Backend via Bastion
         uses: appleboy/ssh-action@v0.1.7
         with:
-          host: ${{ secrets.HOST_BACK }}
+          host: ${{ env.HOST_BACK }}
           username: ec2-user
           key: ${{ secrets.PEM }}
-          proxy_host: ${{ secrets.HOST_BASTION }}
+          proxy_host: ${{ env.HOST_BASTION }}
           script: |
             docker pull ${{ env.IMAGE_NAME_BACK }}:${{ env.TAG }}
             docker rm -f container_back || true
