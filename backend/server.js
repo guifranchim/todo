@@ -4,7 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const cors = require('cors');
 
 const db = mysql.createConnection({
-  host: process.env.DB_HOST || 'localhost',
+  host: process.env.DB_HOST || '10.0.124.144',
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || 'rootpassword',
   database: process.env.DB_NAME || 'tasks_db',
