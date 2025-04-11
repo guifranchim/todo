@@ -13,7 +13,7 @@ jobs:
       HOST_BACK: ${{ secrets.HOST_BACK }}
       HOST_BASTION: ${{ secrets.HOST_BASTION }}
       HOST_FRONT: ${{ secrets.HOST_FRONT }}
-      IMAGE_NAME_BACK: guifranchim/todolist-ua-back   
+      IMAGE_NAME_BACK: guifranchim/todolist-ua-back
       IMAGE_NAME_FRONT: guifranchim/todolist-ua-front
       TAG: latest
     steps:
@@ -26,7 +26,7 @@ jobs:
       - name: Login no Docker Hub
         uses: docker/login-action@v2
         with:
-          ecr: false                  
+          ecr: false
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           logout: true
@@ -44,6 +44,12 @@ jobs:
           docker build -t ${{ env.IMAGE_NAME_FRONT }}:${{ env.TAG }} .
           docker push ${{ env.IMAGE_NAME_FRONT }}:${{ env.TAG }}
 
+      - name: Debug Variáveis de Ambiente
+        run: |
+          echo "HOST_FRONT: ${{ env.HOST_FRONT }}"
+          echo "HOST_BACK: ${{ env.HOST_BACK }}"
+          echo "HOST_BASTION: ${{ env.HOST_BASTION }}"
+
       - name: Deploy Remoto via SSH pelo Bastion
         uses: appleboy/ssh-action@v0.1.7
         with:
@@ -52,14 +58,7 @@ jobs:
           key: ${{ secrets.PEM }}
           script: |
             echo "Atualizando container Frontend no host ${{ env.HOST_FRONT }}..."
-            ssh -o StrictHostKeyChecking=no -i ./my-key-pair.pem ec2-user@${{ env.HOST_FRONT }} "\
-              docker pull ${{ env.IMAGE_NAME_FRONT }}:${{ env.TAG }} && \
-              docker rm -f container_front || true && \
-              docker run -d --restart always --name container_front -p 80:80 ${{ env.IMAGE_NAME_FRONT }}:${{ env.TAG }}"
-      
+            ssh -o StrictHostKeyChecking=no -i ./my-key-pair.pem ec2-user@${{ env.HOST_FRONT }} "docker pull ${{ env.IMAGE_NAME_FRONT }}:${{ env.TAG }} && docker rm -f container_front || true && docker run -d --restart always --name container_front -p 80:80 ${{ env.IMAGE_NAME_FRONT }}:${{ env.TAG }}"
+
             echo "Atualizando container Backend no host ${{ env.HOST_BACK }}..."
-            ssh -o StrictHostKeyChecking=no -i ./my-key-pair.pem ec2-user@${{ env.HOST_BACK }} "\
-              docker pull ${{ env.IMAGE_NAME_BACK }}:${{ env.TAG }} && \
-              docker rm -f container_back || true && \
-              docker run -d --restart always --name container_back -p 3000:3000 ${{ env.IMAGE_NAME_BACK }}:${{ env.TAG }}"
-      
+            ssh -o StrictHostKeyChecking=no -i ./my-key-pair.pem ec2-user@${{ env.HOST_BACK }} "docker pull ${{ env.IMAGE_NAME_BACK }}:${{ env.TAG }} && docker rm -f container_back || true && docker run -d --restart always --name container_back -p 3000:3000 ${{ env.IMAGE_NAME_BACK }}:${{ env.TAG }}"
