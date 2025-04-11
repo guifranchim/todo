@@ -1,7 +1,7 @@
 import axios, { AxiosRequestConfig } from "axios";
 
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: "10.0.87.199:3000",
 });
 
 export const apiRequest = async <T>(config: AxiosRequestConfig): Promise<T> => {
