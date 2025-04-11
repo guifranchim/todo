@@ -59,7 +59,7 @@ jobs:
             ssh -o StrictHostKeyChecking=no -i /tmp/my-key-pair.pem ec2-user@10.0.55.5 \
               "docker pull guifranchim/todolist-ua-front:latest && \
               docker rm -f container_front || true && \
-              docker run -d --restart always --name container_front -p 80:80 guifranchim/todolist-ua-front:latest"
+              docker run -d --restart always --name container_front -p 8080:80 guifranchim/todolist-ua-front:latest"
             
             echo "Atualizando container Backend no host 10.0.87.199..."
             ssh -o StrictHostKeyChecking=no -i /tmp/my-key-pair.pem ec2-user@10.0.87.199 \
