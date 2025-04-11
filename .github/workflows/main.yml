@@ -10,9 +10,9 @@ jobs:
     environment: bastion
     runs-on: ubuntu-latest
     env:
-      HOST_BACK: ${{ secrets.HOST_BACK }}
-      HOST_BASTION: ${{ secrets.HOST_BASTION }}
-      HOST_FRONT: ${{ secrets.HOST_FRONT }}
+      HOST_BACK: ${{ secrets.HOST_BACK }}           
+      HOST_BASTION: ${{ secrets.HOST_BASTION }}       
+      HOST_FRONT: ${{ secrets.HOST_FRONT }}           
       IMAGE_NAME_BACK: guifranchim/todolist-ua-back
       IMAGE_NAME_FRONT: guifranchim/todolist-ua-front
       TAG: latest
@@ -46,9 +46,9 @@ jobs:
 
       - name: Debug Variáveis de Ambiente
         run: |
-          echo "HOST_FRONT: ${{ env.HOST_FRONT }}"
-          echo "HOST_BACK: ${{ env.HOST_BACK }}"
-          echo "HOST_BASTION: ${{ env.HOST_BASTION }}"
+          echo "HOST_FRONT: ${HOST_FRONT}"
+          echo "HOST_BACK: ${HOST_BACK}"
+          echo "HOST_BASTION: ${HOST_BASTION}"
 
       - name: Deploy Remoto via SSH pelo Bastion
         uses: appleboy/ssh-action@v0.1.7
@@ -57,10 +57,12 @@ jobs:
           username: ec2-user
           key: ${{ secrets.PEM }}
           script: |
+            
+            cd ~
             echo "Conectado no Bastion: $(hostname)"
             
-            echo "Atualizando container Frontend no host ${{ env.HOST_FRONT }}..."
-            ssh -o StrictHostKeyChecking=no -i ./my-key-pair.pem ec2-user@${{ env.HOST_FRONT }} "docker pull ${{ env.IMAGE_NAME_FRONT }}:${{ env.TAG }} && docker rm -f container_front || true && docker run -d --restart always --name container_front -p 80:80 ${{ env.IMAGE_NAME_FRONT }}:${{ env.TAG }}"
-
-            echo "Atualizando container Backend no host ${{ env.HOST_BACK }}..."
-            ssh -o StrictHostKeyChecking=no -i ./my-key-pair.pem ec2-user@${{ env.HOST_BACK }} "docker pull ${{ env.IMAGE_NAME_BACK }}:${{ env.TAG }} && docker rm -f container_back || true && docker run -d --restart always --name container_back -p 3000:3000 ${{ env.IMAGE_NAME_BACK }}:${{ env.TAG }}"
+            echo "Atualizando container Frontend no host ${HOST_FRONT}..."
+            ssh -o StrictHostKeyChecking=no -i ~/my-key-pair.pem ec2-user@${HOST_FRONT} "docker pull ${IMAGE_NAME_FRONT}:${TAG} && docker rm -f container_front || true && docker run -d --restart always --name container_front -p 80:80 ${IMAGE_NAME_FRONT}:${TAG}"
+            
+            echo "Atualizando container Backend no host ${HOST_BACK}..."
+            ssh -o StrictHostKeyChecking=no -i ~/my-key-pair.pem ec2-user@${HOST_BACK} "docker pull ${IMAGE_NAME_BACK}:${TAG} && docker rm -f container_back || true && docker run -d --restart always --name container_back -p 3000:3000 ${IMAGE_NAME_BACK}:${TAG}"
