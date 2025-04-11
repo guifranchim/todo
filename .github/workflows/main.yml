@@ -14,8 +14,6 @@ jobs:
       HOST_FRONT: ${{ secrets.HOST_FRONT }}
       IMAGE_NAME_BACK: guifranchim/todolist-ua-back   
       IMAGE_NAME_FRONT: guifranchim/todolist-ua-front
-      username: ${{ secrets.DOCKERHUB_USERNAME }}
-      password: ${{ secrets.DOCKERHUB_TOKEN }}
       TAG: latest
     steps:
       - name: Checkout do Repositório
@@ -27,9 +25,11 @@ jobs:
       - name: Login no Docker Hub
         uses: docker/login-action@v2
         with:
+          ecr: false                  
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           logout: true
+
       - name: Build e Push da Imagem do Backend
         uses: docker/build-push-action@v4
         with:
