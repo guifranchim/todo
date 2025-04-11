@@ -25,7 +25,7 @@ app.use(express.json());
 app.use(cors());
 
 
-app.get('/tasks', (req, res) => {
+app.get('/api/tasks', (req, res) => {
   db.query('SELECT * FROM tasks', (err, results) => {
     if (err) {
       console.log(err)
@@ -36,7 +36,7 @@ app.get('/tasks', (req, res) => {
 });
 
 
-app.post('/tasks', (req, res) => {
+app.post('/api/tasks', (req, res) => {
   const { description, isDone } = req.body;
   const id = uuidv4();
 
@@ -51,7 +51,7 @@ app.post('/tasks', (req, res) => {
 });
 
 
-app.delete('/tasks/:id', (req, res) => {
+app.delete('/api/tasks/:id', (req, res) => {
   const { id } = req.params;
   db.query('DELETE FROM tasks WHERE id = ?', [id], (err, result) => {
     if (err) {
@@ -66,7 +66,7 @@ app.delete('/tasks/:id', (req, res) => {
 });
 
 
-app.patch('/tasks/:id', (req, res) => {
+app.patch('/api/tasks/:id', (req, res) => {
   const { id } = req.params;
   const { isDone } = req.body;
 
