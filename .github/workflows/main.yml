@@ -57,12 +57,12 @@ jobs:
 
             echo "Atualizando container Frontend no host 10.0.55.5..."
             ssh -o StrictHostKeyChecking=no -i /tmp/my-key-pair.pem ec2-user@10.0.55.5 \
-              "docker pull ***/todolist-ua-front:latest && \
+              "docker pull guifranchim/todolist-ua-front:latest && \
               docker rm -f container_front || true && \
-              docker run -d --restart always --name container_front -p 80:80 ***/todolist-ua-front:latest"
+              docker run -d --restart always --name container_front -p 80:80 guifranchim/todolist-ua-front:latest"
             
             echo "Atualizando container Backend no host 10.0.87.199..."
             ssh -o StrictHostKeyChecking=no -i /tmp/my-key-pair.pem ec2-user@10.0.87.199 \
-              "docker pull ***/todolist-ua-back:latest && \
+              "docker pull guifranchim/todolist-ua-back:latest && \
               docker rm -f container_back || true && \
-              docker run -d --restart always --name container_back -p 3000:3000 ***/todolist-ua-back:latest"
+              docker run -d --restart always --name container_back -p 3000:3000 guifranchim/todolist-ua-back:latest"
