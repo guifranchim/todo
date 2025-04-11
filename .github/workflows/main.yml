@@ -10,9 +10,6 @@ jobs:
     environment: bastion
     runs-on: ubuntu-latest
     env:
-      HOST_BACK: ${{ secrets.HOST_BACK }}           
-      HOST_BASTION: ${{ secrets.HOST_BASTION }}       
-      HOST_FRONT: ${{ secrets.HOST_FRONT }}           
       IMAGE_NAME_BACK: guifranchim/todolist-ua-back
       IMAGE_NAME_FRONT: guifranchim/todolist-ua-front
       TAG: latest
@@ -51,12 +48,12 @@ jobs:
           username: ec2-user
           key: ${{ secrets.PEM }}
           script: |
-            echo "Conectado no Bastion: ec2-18-226-52-135.us-east-2.compute.amazonaws.com"
-      
+            echo "Conectado no Bastion: $(hostname)"
+
       - name: Atualizar Container Frontend via Bastion
         uses: appleboy/ssh-action@v0.1.7
         with:
-          host: 10.0.55.5
+          host: 3.142.47.11
           username: ec2-user
           key: ${{ secrets.PEM }}
           proxy_host: ec2-18-226-52-135.us-east-2.compute.amazonaws.com
