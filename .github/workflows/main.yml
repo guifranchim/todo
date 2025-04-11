@@ -54,9 +54,9 @@ jobs:
             rm -f /tmp/my-key-pair.pem
             printf '%s\n' "${{ secrets.PEM }}" > /tmp/my-key-pair.pem
             chmod 600 /tmp/my-key-pair.pem
-            
-            echo "Atualizando container Frontend no host 3.142.47.11..."
-            ssh -o StrictHostKeyChecking=no -i /tmp/my-key-pair.pem ec2-user@3.142.47.11 \
+
+            echo "Atualizando container Frontend no host 10.0.55.5..."
+            ssh -o StrictHostKeyChecking=no -i /tmp/my-key-pair.pem ec2-user@10.0.55.5 \
               "docker pull ***/todolist-ua-front:latest && \
               docker rm -f container_front || true && \
               docker run -d --restart always --name container_front -p 80:80 ***/todolist-ua-front:latest"
