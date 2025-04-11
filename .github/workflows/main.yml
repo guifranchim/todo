@@ -44,32 +44,35 @@ jobs:
           docker build -t ${{ env.IMAGE_NAME_FRONT }}:${{ env.TAG }} .
           docker push ${{ env.IMAGE_NAME_FRONT }}:${{ env.TAG }}
 
-      - name: Debug Variáveis de Ambiente
-        run: |
-          echo "HOST_FRONT: ${HOST_FRONT}"
-          echo "HOST_BACK: ${HOST_BACK}"
-          echo "HOST_BASTION: ${HOST_BASTION}"
-
-      - name: Deploy Remoto via SSH pelo Bastion
+      - name: Testar Conexão com Bastion
         uses: appleboy/ssh-action@v0.1.7
         with:
-          host: ${{ env.HOST_BASTION }}
+          host: ${{ secrets.HOST_BASTION }}
           username: ec2-user
           key: ${{ secrets.PEM }}
           script: |
-            cd ~
             echo "Conectado no Bastion: $(hostname)"
-            
-            # Cria o arquivo de chave privado para conexões subsequentes
-            echo "${SSH_PRIVATE_KEY}" > ~/my-key-pair.pem
-            chmod 600 ~/my-key-pair.pem
-            
-            # Opcional: imprimir as variáveis para debug
-            echo "HOST_FRONT: ${HOST_FRONT}"
-            echo "HOST_BACK: ${HOST_BACK}"
-            
-            echo "Atualizando container Frontend no host ${HOST_FRONT}..."
-            ssh -o StrictHostKeyChecking=no -i ~/my-key-pair.pem ec2-user@${HOST_FRONT} "docker pull ${IMAGE_NAME_FRONT}:${TAG} && docker rm -f container_front || true && docker run -d --restart always --name container_front -p 80:80 ${IMAGE_NAME_FRONT}:${TAG}"
-            
-            echo "Atualizando container Backend no host ${HOST_BACK}..."
-            ssh -o StrictHostKeyChecking=no -i ~/my-key-pair.pem ec2-user@${HOST_BACK} "docker pull ${IMAGE_NAME_BACK}:${TAG} && docker rm -f container_back || true && docker run -d --restart always --name container_back -p 3000:3000 ${IMAGE_NAME_BACK}:${TAG}"
+      
+      - name: Atualizar Container Frontend via Bastion
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.HOST_FRONT }}
+          username: ec2-user
+          key: ${{ secrets.PEM }}
+          proxy_host: ${{ secrets.HOST_BASTION }}
+          script: |
+            docker pull ${{ env.IMAGE_NAME_FRONT }}:${{ env.TAG }}
+            docker rm -f container_front || true
+            docker run -d --restart always --name container_front -p 80:80 ${{ env.IMAGE_NAME_FRONT }}:${{ env.TAG }}
+
+      - name: Atualizar Container Backend via Bastion
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.HOST_BACK }}
+          username: ec2-user
+          key: ${{ secrets.PEM }}
+          proxy_host: ${{ secrets.HOST_BASTION }}
+          script: |
+            docker pull ${{ env.IMAGE_NAME_BACK }}:${{ env.TAG }}
+            docker rm -f container_back || true
+            docker run -d --restart always --name container_back -p 3000:3000 ${{ env.IMAGE_NAME_BACK }}:${{ env.TAG }}
