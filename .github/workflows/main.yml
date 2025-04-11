@@ -57,6 +57,8 @@ jobs:
           username: ec2-user
           key: ${{ secrets.PEM }}
           script: |
+            echo "Conectado no Bastion: $(hostname)"
+            
             echo "Atualizando container Frontend no host ${{ env.HOST_FRONT }}..."
             ssh -o StrictHostKeyChecking=no -i ./my-key-pair.pem ec2-user@${{ env.HOST_FRONT }} "docker pull ${{ env.IMAGE_NAME_FRONT }}:${{ env.TAG }} && docker rm -f container_front || true && docker run -d --restart always --name container_front -p 80:80 ${{ env.IMAGE_NAME_FRONT }}:${{ env.TAG }}"
 
