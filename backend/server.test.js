@@ -1,12 +1,13 @@
 const request = require('supertest');
-const app = require('../src/api/server'); // Supondo que seu código do servidor esteja no src/api/server.js
+const app = require('./server'); 
 const mysql = require('mysql2');
 const { v4: uuidv4 } = require('uuid');
+import { vi } from 'vitest';
 
-jest.mock('mysql2', () => ({
-  createConnection: jest.fn().mockReturnValue({
-    query: jest.fn(),
-    connect: jest.fn(),
+vi.mock('mysql2', () => ({
+  createConnection: vi.fn().mockReturnValue({
+    query: vi.fn(),
+    connect: vi.fn(),
   }),
 }));
 
@@ -17,7 +18,7 @@ beforeAll(() => {
 });
 
 afterEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('API Tasks Endpoints', () => {
