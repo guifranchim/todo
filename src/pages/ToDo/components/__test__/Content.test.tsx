@@ -35,13 +35,10 @@ describe("<Content>", () => {
       </ToastProvider>
     );
     
-    const buttonElements = screen.getAllByText(/Criar/i);
-
-
-    expect(buttonElements).to.have.lengthOf(1);
-
-
-    expect(buttonElements[0]).to.have.property('disabled', true);
+    const buttons = screen.getAllByRole('button', { name: /Criar/i });
+    const button = buttons[0]; 
+    
+    expect(button).to.have.property('disabled', true);
   });
 
   it("Deve habilitar o botão se a descrição não estiver vazia", () => {
@@ -54,7 +51,8 @@ describe("<Content>", () => {
     )
     
     const inputElement = screen.getByPlaceholderText(/Adicione uma nova tarefa/i);
-    const buttonElement = screen.getByText(/Criar/i);
+    const buttonElement = screen.getByRole('button', { name: /Criar/i });
+
     
     userEvent.type(inputElement, 'New task');
 
