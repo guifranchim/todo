@@ -31,7 +31,13 @@ app.get('/api/tasks', (req, res) => {
       console.log(err)
       return res.status(500).json({ error: 'Erro ao obter as tarefas' });
     }
-    res.json(results);
+
+    const tasksComTeste = results.map(r => ({
+      ...r,
+      teste: "teste"
+    }));
+
+    res.json(tasksComTeste);
   });
 });
 
