@@ -1,39 +1,65 @@
-name: CI/CD - Todo UA
+name: Build and Deploy to EKS
 
 on:
   push:
     branches:
       - dev
       - main
-      - 'release/*'
 
 env:
   AWS_REGION: us-east-2
   CLUSTER_NAME: todo-ua
+  IMAGE_NAME_BACK: guifranchim/todolist-ua-back
+  IMAGE_NAME_FRONT: guifranchim/todolist-ua-front
+  TAG: latest
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: aws
-    if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/')
     steps:
-      - name: Checkout código
+      - name: Checkout do Repositório
         uses: actions/checkout@v3
 
-      - name: Configurar AWS CLI
+      # - name: Setup Docker Buildx
+      #   uses: docker/setup-buildx-action@v2
+
+      # - name: Login no Docker Hub
+      #   uses: docker/login-action@v2
+      #   with:
+      #     username: ${{ secrets.DOCKERHUB_USERNAME }}
+      #     password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # - name: Build e Push da Imagem do Backend
+      #   uses: docker/build-push-action@v4
+      #   with:
+      #     context: ./backend
+      #     file: ./backend/Dockerfile
+      #     push: true
+      #     tags: ${{ env.IMAGE_NAME_BACK }}:${{ env.TAG }}
+
+      # - name: Build e Push da Imagem do Frontend
+      #   uses: docker/build-push-action@v4
+      #   with:
+      #     context: .
+      #     file: ./Dockerfile
+      #     push: true
+      #     tags: ${{ env.IMAGE_NAME_FRONT }}:${{ env.TAG }}
+
+      - name: Configurar credenciais AWS
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: us-east-2
 
-      - name: Setup kubectl com EKS Auth
+      - name: Setup kubectl com EKS
         uses: aws-actions/eks-setup-kubectl@v3
         with:
-          cluster-name: ${{ env.CLUSTER_NAME }}
-          region: ${{ env.AWS_REGION }}
+          cluster-name: todo-ua
+          region: us-east-2
 
-      - name: Aplicar YAML no cluster
+      - name: Aplicar Manifesto no EKS
         run: |
           if [[ "${GITHUB_REF##*/}" == "main" ]]; then
             kubectl apply -f infra/app.yaml -n production
