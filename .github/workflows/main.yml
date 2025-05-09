@@ -53,16 +53,17 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-2
 
-      - name: Setup kubectl com EKS
-        uses: aws-actions/eks-setup-kubectl@v3
+      - name: Deploy para EKS
+        uses: giovannirossini/aws-eks-with-kubectl@v2.0.0
         with:
-          cluster-name: todo-ua
-          region: us-east-2
-
-      - name: Aplicar Manifesto no EKS
-        run: |
-          if [[ "${GITHUB_REF##*/}" == "main" ]]; then
-            kubectl apply -f infra/app.yaml -n production
-          else
-            kubectl apply -f infra/app.yaml -n stage
-          fi
+          aws-access-key-id:    ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:           "us-east-2"
+          cluster-name:         "todo-ua"
+          kubectl-version:      "1.32"
+          command: |
+            if [[ "${GITHUB_REF##*/}" == "main" ]]; then
+              kubectl apply -f infra/app.yaml -n production
+            else
+              kubectl apply -f infra/app.yaml -n stage
+            fi
