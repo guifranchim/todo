@@ -28,10 +28,17 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Atualizar kubeconfig
-        run: aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME
+        run: |
+          aws eks update-kubeconfig \
+            --region $AWS_REGION \
+            --name $CLUSTER_NAME \
+            --kubeconfig ./kubeconfig.yaml
+          export KUBECONFIG=./kubeconfig.yaml
+          kubectl get nodes
 
       - name: Aplicar YAML no cluster
         run: |
+          export KUBECONFIG=./kubeconfig.yaml
           if [[ "${GITHUB_REF##*/}" == "main" ]]; then
             kubectl apply -f infra/app.yaml -n production
           else
