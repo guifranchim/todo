@@ -1,22 +1,111 @@
-# Secret com as credenciais do banco
+# --------------------------
+# Namespaces
+# --------------------------
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: stage
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+
+# --------------------------
+# PersistentVolumes (hostPath para exemplo local)
+# --------------------------
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mysql-pv-stage
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /mnt/data/mysql-stage
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mysql-pv-production
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /mnt/data/mysql-production
+
+# --------------------------
+# PersistentVolumeClaims
+# --------------------------
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pvc
+  namespace: stage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  volumeName: mysql-pv-stage
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pvc
+  namespace: production
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  volumeName: mysql-pv-production
+
+# --------------------------
+# Secrets de acesso ao banco
+# --------------------------
+---
 apiVersion: v1
 kind: Secret
 metadata:
   name: db-secret
+  namespace: stage
 type: Opaque
 data:
-  MYSQL_USER: bXlzcWw=       # base64 de "mysql"
-  MYSQL_ROOT_PASSWORD: bXlzcWw=       # base64 de "mysql"
-  MYSQL_PASSWORD: bXlzcWw=       # base64 de "mysql"
-  MYSQL_DATABASE: dGFza3NfZGI=   # base64 de "tasks_db"
-
+  MYSQL_ROOT_PASSWORD: bXlzcWw=
+  MYSQL_DATABASE: dGFza3NfZGI=
+  MYSQL_USER: bXlzcWw=
+  MYSQL_PASSWORD: bXlzcWw=
 ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-secret
+  namespace: production
+type: Opaque
+data:
+  MYSQL_ROOT_PASSWORD: bXlzcWw=
+  MYSQL_DATABASE: dGFza3NfZGI=
+  MYSQL_USER: bXlzcWw=
+  MYSQL_PASSWORD: bXlzcWw=
 
-# Deployment do banco de dados (MySQL)
+# --------------------------
+# MySQL Deployment & Service
+# --------------------------
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mysql
+  namespace: stage
 spec:
   replicas: 1
   selector:
@@ -28,54 +117,119 @@ spec:
         app: mysql
     spec:
       containers:
-      - name: mysql
-        image: mysql:8.0
-        env:
-        - name: MYSQL_ROOT_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: db-secret
-              key: MYSQL_ROOT_PASSWORD
-        - name: MYSQL_DATABASE
-          valueFrom:
-            secretKeyRef:
-              name: db-secret
-              key: MYSQL_DATABASE
-        - name: MYSQL_USER
-          valueFrom:
-            secretKeyRef:
-              name: db-secret
-              key: MYSQL_USER
-        - name: MYSQL_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: db-secret
-              key: MYSQL_PASSWORD
-        ports:
-        - containerPort: 3306
-
+        - name: mysql
+          image: mysql:8.0
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_ROOT_PASSWORD
+            - name: MYSQL_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_DATABASE
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_USER
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_PASSWORD
+          volumeMounts:
+            - name: mysql-storage
+              mountPath: /var/lib/mysql
+      volumes:
+        - name: mysql-storage
+          persistentVolumeClaim:
+            claimName: mysql-pvc
 ---
-
-# Service do banco de dados
 apiVersion: v1
 kind: Service
 metadata:
   name: db-service
+  namespace: stage
 spec:
   type: ClusterIP
   selector:
     app: mysql
   ports:
-  - port: 3306
-    targetPort: 3306
-
+    - port: 3306
+      targetPort: 3306
 ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  namespace: production
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_ROOT_PASSWORD
+            - name: MYSQL_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_DATABASE
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_USER
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_PASSWORD
+          volumeMounts:
+            - name: mysql-storage
+              mountPath: /var/lib/mysql
+      volumes:
+        - name: mysql-storage
+          persistentVolumeClaim:
+            claimName: mysql-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db-service
+  namespace: production
+spec:
+  type: ClusterIP
+  selector:
+    app: mysql
+  ports:
+    - port: 3306
+      targetPort: 3306
 
-# Deployment do backend
+# --------------------------
+# Backend Deployment & Service
+# --------------------------
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend
+  namespace: stage
 spec:
   replicas: 1
   selector:
@@ -87,50 +241,103 @@ spec:
         app: backend
     spec:
       containers:
-      - name: backend
-        image: guifranchim/todolist-ua-back:latest
-        ports:
-        - containerPort: 3000
-        env:
-        - name: DB_HOST
-          value: "db-service"
-        - name: DB_USER
-          valueFrom:
-            secretKeyRef:
-              name: db-secret
-              key: MYSQL_USER
-        - name: DB_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: db-secret
-              key: MYSQL_PASSWORD
-        - name: DB_DATABASE
-          valueFrom:
-            secretKeyRef:
-              name: db-secret
-              key: MYSQL_DATABASE
+        - name: backend
+          image: guifranchim/todolist-ua-back:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: DB_HOST
+              value: "db-service"
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_PASSWORD
+            - name: DB_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_DATABASE
 ---
-
-# Service do backend
 apiVersion: v1
 kind: Service
 metadata:
   name: backend-service
+  namespace: stage
 spec:
   type: ClusterIP
   selector:
     app: backend
   ports:
-  - port: 3000
-    targetPort: 3000
-
+    - port: 3000
+      targetPort: 3000
 ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: production
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: guifranchim/todolist-ua-back:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: DB_HOST
+              value: "db-service"
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_PASSWORD
+            - name: DB_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_DATABASE
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: production
+spec:
+  type: ClusterIP
+  selector:
+    app: backend
+  ports:
+    - port: 3000
+      targetPort: 3000
 
-# Deployment do frontend
+# --------------------------
+# Frontend Deployment & Service
+# --------------------------
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: frontend
+  namespace: stage
 spec:
   replicas: 1
   selector:
@@ -142,23 +349,56 @@ spec:
         app: frontend
     spec:
       containers:
-      - name: frontend
-        image: guifranchim/todolist-ua-front:latest
-        ports:
-        - containerPort: 80
-
+        - name: frontend
+          image: guifranchim/todolist-ua-front:latest
+          ports:
+            - containerPort: 80
 ---
-
-# Service do frontend (NodePort para acessar do navegador)
 apiVersion: v1
 kind: Service
 metadata:
   name: frontend-service
+  namespace: stage
 spec:
   type: NodePort
   selector:
     app: frontend
   ports:
-  - port: 80
-    targetPort: 80
-    nodePort: 30080
+    - port: 80
+      targetPort: 80
+      nodePort: 30080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: production
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: guifranchim/todolist-ua-front:latest
+          ports:
+            - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+  namespace: production
+spec:
+  type: NodePort
+  selector:
+    app: frontend
+  ports:
+    - port: 80
+      targetPort: 80
+      nodePort: 30081
