@@ -55,7 +55,7 @@ jobs:
           tags:    ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.IMAGE_REPO_FRONT }}:${{ env.TAG }}
 
       - name: Update kubeconfig for EKS
-        uses: aws-actions/eks-update-kubeconfig@v2
+        uses: aws-actions/eks-update-kubeconfig@v1
         with:
           cluster-name: ${{ env.EKS_CLUSTER }}
           region:       ${{ env.AWS_REGION }}
