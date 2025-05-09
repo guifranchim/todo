@@ -12,7 +12,6 @@ env:
   CLUSTER_NAME: todo-ua
 
 jobs:
- 
   deploy:
     needs: test
     runs-on: ubuntu-latest
