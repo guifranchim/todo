@@ -28,7 +28,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup kubectl com EKS Auth
-        uses: aws-actions/eks-setup-kubectl@v1
+        uses: aws-actions/eks-setup-kubectl@v3
         with:
           cluster-name: ${{ env.CLUSTER_NAME }}
           region: ${{ env.AWS_REGION }}
