@@ -10,6 +10,7 @@ jobs:
     environment: aws
     runs-on: ubuntu-latest
 
+    # Job-level env carregadas no início
     env:
       AWS_REGION: us-east-2
       EKS_CLUSTER: todo-ua
@@ -21,15 +22,12 @@ jobs:
       - name: Checkout do Repositório
         uses: actions/checkout@v3
 
-      # 1) Login no Docker Hub
       - name: Login no Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          logout: true
 
-      # 2) Configure AWS Credentials
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -37,9 +35,11 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region:            ${{ env.AWS_REGION }}
 
+      # Captura o Account ID e expõe como output
       - name: Get AWS Account ID
-        id: aws-account
-        run: echo "AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_ENV
+        id: aws_account
+        run: |
+          echo "account_id=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_OUTPUT
 
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v1
@@ -47,55 +47,60 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      # 3) Build & Push no Docker Hub (opcional)
+      # Build & Push no Docker Hub
       - name: Build & Push Backend to Docker Hub
         uses: docker/build-push-action@v4
         with:
           context: ./backend
-          file:    ./backend/Dockerfile
-          push:    true
-          tags:    ${{ env.IMAGE_REPO_BACK }}:${{ env.TAG }}
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_REPO_BACK }}:${{ env.TAG }}
 
       - name: Build & Push Frontend to Docker Hub
         uses: docker/build-push-action@v4
         with:
           context: .
-          file:    ./Dockerfile
-          push:    true
-          tags:    ${{ env.IMAGE_REPO_FRONT }}:${{ env.TAG }}
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_REPO_FRONT }}:${{ env.TAG }}
 
-      # 4) Build & Push no Amazon ECR
+      # Build & Push no Amazon ECR usando o account_id de output
       - name: Build & Push Backend to ECR
         uses: docker/build-push-action@v4
         with:
           context: ./backend
-          file:    ./backend/Dockerfile
-          push:    true
-          tags:    ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.IMAGE_REPO_BACK }}:${{ env.TAG }}
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.aws_account.outputs.account_id }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.IMAGE_REPO_BACK }}:${{ env.TAG }}
 
       - name: Build & Push Frontend to ECR
         uses: docker/build-push-action@v4
         with:
           context: .
-          file:    ./Dockerfile
-          push:    true
-          tags:    ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.IMAGE_REPO_FRONT }}:${{ env.TAG }}
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ steps.aws_account.outputs.account_id }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.IMAGE_REPO_FRONT }}:${{ env.TAG }}
 
-      - name: Update kubeconfig for EKS
+      # Atualiza o kubeconfig e faz o rollout no EKS com shell expansion
+      - name: Deploy to EKS
         run: |
+          # variáveis de ambiente dentro do shell
+          AWS_ACCOUNT_ID=${{ steps.aws_account.outputs.account_id }}
           aws eks update-kubeconfig \
-            --region ${{ env.AWS_REGION }} \
-            --name   ${{ env.EKS_CLUSTER }}
+            --region $AWS_REGION \
+            --name   $EKS_CLUSTER
 
-      - name: Deploy to EKS (rolling image update)
-        run: |
-          kubectl set image deployment/${{ env.IMAGE_REPO_BACK }} \
-            ${IMAGE_REPO_BACK}=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.IMAGE_REPO_BACK }}:${{ env.TAG }} \
+          kubectl set image deployment/$IMAGE_REPO_BACK \
+            $IMAGE_REPO_BACK=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$IMAGE_REPO_BACK:$TAG \
             --namespace default
 
-          kubectl set image deployment/${{ env.IMAGE_REPO_FRONT }} \
-            ${IMAGE_REPO_FRONT}=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.IMAGE_REPO_FRONT }}:${{ env.TAG }} \
+          kubectl set image deployment/$IMAGE_REPO_FRONT \
+            $IMAGE_REPO_FRONT=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$IMAGE_REPO_FRONT:$TAG \
             --namespace default
 
-          kubectl rollout status deployment/${{ env.IMAGE_REPO_BACK }}  --namespace default
-          kubectl rollout status deployment/${{ env.IMAGE_REPO_FRONT }} --namespace default
+          kubectl rollout status deployment/$IMAGE_REPO_BACK  --namespace default
+          kubectl rollout status deployment/$IMAGE_REPO_FRONT --namespace default
