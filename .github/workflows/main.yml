@@ -28,11 +28,12 @@ jobs:
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Set up gcloud CLI
+      - name: Set up gcloud CLI (with GKE auth plugin)
         uses: google-github-actions/setup-gcloud@v1
         with:
           project_id: ${{ env.GCP_PROJECT }}
           export_default_credentials: true
+          install_components: gke-gcloud-auth-plugin
 
       - name: Configure Docker for Artifact Registry
         run: |
@@ -64,16 +65,16 @@ jobs:
 
       - name: Deploy to GKE
         run: |
-        
+          
           kubectl set image deployment/${{ env.IMAGE_REPO_BACK }} \
             ${{ env.IMAGE_REPO_BACK }}=us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.BACK_REPO }}/${{ env.IMAGE_REPO_BACK }}:${{ env.TAG }} \
             --namespace default
 
-        
+          
           kubectl set image deployment/${{ env.IMAGE_REPO_FRONT }} \
             ${{ env.IMAGE_REPO_FRONT }}=us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}:${{ env.TAG }} \
             --namespace default
 
-        
+          
           kubectl rollout status deployment/${{ env.IMAGE_REPO_BACK }}  --namespace default
           kubectl rollout status deployment/${{ env.IMAGE_REPO_FRONT }} --namespace default
