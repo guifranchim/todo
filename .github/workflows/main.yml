@@ -4,11 +4,12 @@ on:
   push:
     branches:
       - main
+      - development
 
 jobs:
   build-and-deploy:
-    environment: gcp
     runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'gcp-production' || 'gcp-staging' }}
     env:
       GCP_PROJECT: exalted-legacy-459419-m8
       GKE_CLUSTER: todo-ua
@@ -18,6 +19,7 @@ jobs:
       IMAGE_REPO_BACK: todolist-ua-back
       IMAGE_REPO_FRONT: todolist-ua-front
       TAG: ${{ github.sha }}
+      NAMESPACE: ${{ github.ref == 'refs/heads/main' && 'production' || 'stage' }}
 
     steps:
       - name: Checkout Repository
@@ -63,18 +65,39 @@ jobs:
             --zone ${{ env.GKE_ZONE }} \
             --project ${{ env.GCP_PROJECT }}
 
+      - name: Ensure namespace exists
+        run: |
+          kubectl get namespace ${{ env.NAMESPACE }} || kubectl create namespace ${{ env.NAMESPACE }}
+
+      - name: Create MySQL PVC
+        run: |
+          cat <<EOF | kubectl apply -f - -n ${{ env.NAMESPACE }}
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+            name: mysql-pvc
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 5Gi
+            storageClassName: standard
+          EOF
+
+      - name: Apply Kubernetes manifests
+        run: |
+          kubectl apply -f infra/app.yaml -n ${{ env.NAMESPACE }}
+
       - name: Deploy to GKE
         run: |
-          
           kubectl set image deployment/${{ env.IMAGE_REPO_BACK }} \
             ${{ env.IMAGE_REPO_BACK }}=us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.BACK_REPO }}/${{ env.IMAGE_REPO_BACK }}:${{ env.TAG }} \
-            --namespace default
+            --namespace ${{ env.NAMESPACE }}
 
-          
           kubectl set image deployment/${{ env.IMAGE_REPO_FRONT }} \
             ${{ env.IMAGE_REPO_FRONT }}=us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}:${{ env.TAG }} \
-            --namespace default
+            --namespace ${{ env.NAMESPACE }}
 
-          
-          kubectl rollout status deployment/${{ env.IMAGE_REPO_BACK }}  --namespace default
-          kubectl rollout status deployment/${{ env.IMAGE_REPO_FRONT }} --namespace default
+          kubectl rollout status deployment/${{ env.IMAGE_REPO_BACK }} --namespace ${{ env.NAMESPACE }}
+          kubectl rollout status deployment/${{ env.IMAGE_REPO_FRONT }} --namespace ${{ env.NAMESPACE }}
