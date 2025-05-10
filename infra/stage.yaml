@@ -1,90 +1,201 @@
-name: Build and Deploy to GKE
-
-on:
-  push:
-    branches: [ main, development ]
-
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    environment: gcp
-    env:
-      GCP_PROJECT: exalted-legacy-459419-m8
-      GKE_CLUSTER: todo-ua
-      GKE_ZONE: southamerica-east1-a
-      BACK_REPO: todolist-backend-repo
-      FRONT_REPO: todolist-frontend-repo
-      IMAGE_REPO_BACK: todolist-ua-back
-      IMAGE_REPO_FRONT: todolist-ua-front
-      TAG: ${{ github.sha }}
-      NAMESPACE: ${{ github.ref == 'refs/heads/main' && 'production' || 'stage' }}
-      ENV_FILE: ${{ github.ref == 'refs/heads/main' && 'production.yml' || 'stage.yml' }}
-
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v1
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      - name: Set up gcloud CLI (incl. auth plugin)
-        uses: google-github-actions/setup-gcloud@v1
-        with:
-          project_id: ${{ env.GCP_PROJECT }}
-          export_default_credentials: true
-          install_components: gke-gcloud-auth-plugin
-
-      - name: Configure Docker for Artifact Registry
-        run: |
-          gcloud auth configure-docker us-docker.pkg.dev --quiet
-
-      - name: Build & Push Backend
-        uses: docker/build-push-action@v4
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile
-          push: true
-          tags: |
-            us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.BACK_REPO }}/${{ env.IMAGE_REPO_BACK }}:${{ env.TAG }}
-            us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.BACK_REPO }}/${{ env.IMAGE_REPO_BACK }}:latest
-
-      - name: Build & Push Frontend
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: |
-            us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}:${{ env.TAG }}
-            us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}:latest
-
-      - name: Get GKE Credentials
-        run: |
-          gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} \
-            --zone     ${{ env.GKE_ZONE }} \
-            --project  ${{ env.GCP_PROJECT }}
-
-      - name: Deploy infra (${{ env.NAMESPACE }})
-        run: |
-          kubectl apply -f infra/${{ env.ENV_FILE }}
-
-      - name: Deploy apps with prune (${{ env.NAMESPACE }})
-        run: |
-          # agora o selector faz "OR" em vez de "AND"
-          kubectl apply -f infra/${{ env.ENV_FILE }} \
-            --prune -l 'app in (backend,frontend,mysql)' \
-            -n ${{ env.NAMESPACE }}
-
-      - name: Update images (${{ env.NAMESPACE }})
-        run: |
-          kubectl set image deployment/backend \
-            backend=us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.BACK_REPO }}/${{ env.IMAGE_REPO_BACK }}:${{ env.TAG }} \
-            -n ${{ env.NAMESPACE }}
-
-          kubectl set image deployment/frontend \
-            frontend=us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}:${{ env.TAG }} \
-            -n ${{ env.NAMESPACE }}
-
-          kubectl rollout status deployment/backend  -n ${{ env.NAMESPACE }}
-          kubectl rollout status deployment/frontend -n ${{ env.NAMESPACE }}
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: stage
+---
+# PersistentVolume
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mysql-pv-stage
+spec:
+  storageClassName: standard
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /mnt/data/mysql-stage
+    type: DirectoryOrCreate
+---
+# PersistentVolumeClaim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pvc
+  namespace: stage
+spec:
+  storageClassName: standard
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  volumeName: mysql-pv-stage
+---
+# DB Secret (mesmos dados do prod, mas isolado)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-secret
+  namespace: stage
+type: Opaque
+data:
+  MYSQL_ROOT_PASSWORD: bXlzcWw=
+  MYSQL_DATABASE:     dGFza3NfZGI=
+  MYSQL_USER:         bXlzcWw=
+  MYSQL_PASSWORD:     bXlzcWw=
+---
+# MySQL Deployment & Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  namespace: stage
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_ROOT_PASSWORD
+            - name: MYSQL_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_DATABASE
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_USER
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_PASSWORD
+          volumeMounts:
+            - name: mysql-storage
+              mountPath: /var/lib/mysql
+      volumes:
+        - name: mysql-storage
+          persistentVolumeClaim:
+            claimName: mysql-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db-service
+  namespace: stage
+spec:
+  type: ClusterIP
+  selector:
+    app: mysql
+  ports:
+    - port: 3306
+      targetPort: 3306
+---
+# Backend Deployment & Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: stage
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: us-docker.pkg.dev/exalted-legacy-459419-m8/todolist-backend-repo/todolist-ua-back:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+          env:
+            - name: DB_HOST
+              value: "db-service"
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_PASSWORD
+            - name: DB_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_DATABASE
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: stage
+spec:
+  type: ClusterIP
+  selector:
+    app: backend
+  ports:
+    - port: 3000
+      targetPort: 3000
+---
+# Frontend Deployment & Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: stage
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: us-docker.pkg.dev/exalted-legacy-459419-m8/todolist-frontend-repo/todolist-ua-front:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+  namespace: stage
+spec:
+  type: NodePort
+  selector:
+    app: frontend
+  ports:
+    - port: 80
+      targetPort: 80
+      nodePort: 30080
