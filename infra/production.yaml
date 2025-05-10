@@ -17,6 +17,7 @@ spec:
     - ReadWriteOnce
   hostPath:
     path: /mnt/data/mysql-production
+    type: DirectoryOrCreate
 ---
 # PersistentVolumeClaim
 apiVersion: v1
