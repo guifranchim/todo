@@ -4,83 +4,77 @@ on:
   push:
     branches: [ main, development ]
 
+env:
+  GCP_PROJECT: exalted-legacy-459419-m8
+  GKE_CLUSTER: todo-ua
+  GKE_ZONE: southamerica-east1-a
+  BACK_REPO: todolist-backend-repo
+  FRONT_REPO: todolist-frontend-repo
+  IMAGE_REPO_BACK: todolist-ua-back
+  IMAGE_REPO_FRONT: todolist-ua-front
+  TAG: ${{ github.sha }}
+  ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'stage' }}
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     environment: gcp
-    env:
-      GCP_PROJECT: exalted-legacy-459419-m8
-      GKE_CLUSTER: todo-ua
-      GKE_ZONE: southamerica-east1-a
-      BACK_REPO: todolist-backend-repo
-      FRONT_REPO: todolist-frontend-repo
-      IMAGE_REPO_BACK: todolist-ua-back
-      IMAGE_REPO_FRONT: todolist-ua-front
-      TAG: ${{ github.sha }}
-      NAMESPACE: ${{ github.ref == 'refs/heads/main' && 'production' || 'stage' }}
-      ENV_FILE: ${{ github.ref == 'refs/heads/main' && 'production.yaml' || 'stage.yaml' }}
 
     steps:
-      - uses: actions/checkout@v3
+    - uses: actions/checkout@v3
 
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v1
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+    - name: Authenticate to GCP
+      uses: google-github-actions/auth@v1
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Set up gcloud CLI (incl. auth plugin)
-        uses: google-github-actions/setup-gcloud@v1
-        with:
-          project_id: ${{ env.GCP_PROJECT }}
-          export_default_credentials: true
-          install_components: gke-gcloud-auth-plugin
+    - name: Setup gcloud & kubectl
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        project_id: ${{ env.GCP_PROJECT }}
+        export_default_credentials: true
+        install_components: gke-gcloud-auth-plugin
 
-      - name: Configure Docker for Artifact Registry
-        run: |
-          gcloud auth configure-docker us-docker.pkg.dev --quiet
+    - name: Configure Docker
+      run: gcloud auth configure-docker us-docker.pkg.dev --quiet
 
-      - name: Build & Push Backend
-        uses: docker/build-push-action@v4
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile
-          push: true
-          tags: |
-            us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.BACK_REPO }}/${{ env.IMAGE_REPO_BACK }}:${{ env.TAG }}
-            us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.BACK_REPO }}/${{ env.IMAGE_REPO_BACK }}:latest
+    - name: Build & Push Backend
+      uses: docker/build-push-action@v4
+      with:
+        context: ./backend
+        file: ./backend/Dockerfile
+        push: true
+        tags: |
+          us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.BACK_REPO }}/${{ env.IMAGE_REPO_BACK }}:${{ env.TAG }}
+          us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.BACK_REPO }}/${{ env.IMAGE_REPO_BACK }}:latest
 
-      - name: Build & Push Frontend
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: |
-            us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}:${{ env.TAG }}
-            us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}:latest
+    - name: Build & Push Frontend
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        file: ./Dockerfile
+        push: true
+        tags: |
+          us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}:${{ env.TAG }}
+          us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}:latest
 
-      - name: Get GKE Credentials
-        run: |
-          gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} \
-            --zone ${{ env.GKE_ZONE }} \
-            --project ${{ env.GCP_PROJECT }}
+    - name: Get GKE credentials
+      run: |
+        gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} \
+          --zone ${{ env.GKE_ZONE }} \
+          --project ${{ env.GCP_PROJECT }}
 
-      - name: Deploy infra (${{ env.NAMESPACE }})
-        run: |
-          kubectl apply -f infra/${{ env.ENV_FILE }}
+    - name: Deploy all resources
+      run: |
+        kubectl apply -f infra/${{ env.ENV }}.yaml
 
-      - name: Deploy app (${{ env.NAMESPACE }})
-        run: |
-          kubectl apply -f infra/${{ env.ENV_FILE }} \
-            --prune -l app=backend,app=frontend,app=mysql -n ${{ env.NAMESPACE }}
-
-      - name: Update images (${{ env.NAMESPACE }})
-        run: |
-          kubectl set image deployment/backend \
-            backend=us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.BACK_REPO }}/${{ env.IMAGE_REPO_BACK }}:${{ env.TAG }} \
-            -n ${{ env.NAMESPACE }}
-          kubectl set image deployment/frontend \
-            frontend=us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}:${{ env.TAG }} \
-            -n ${{ env.NAMESPACE }}
-          kubectl rollout status deployment/backend  -n ${{ env.NAMESPACE }}
-          kubectl rollout status deployment/frontend -n ${{ env.NAMESPACE }}
+    - name: Update images & wait rollout
+      run: |
+        kubectl set image deployment/backend \
+          backend=us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.BACK_REPO }}/${{ env.IMAGE_REPO_BACK }}:${{ env.TAG }} \
+          -n ${{ env.ENV }}
+        kubectl set image deployment/frontend \
+          frontend=us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}:${{ env.TAG }} \
+          -n ${{ env.ENV }}
+        kubectl rollout status deployment/backend  -n ${{ env.ENV }}
+        kubectl rollout status deployment/frontend -n ${{ env.ENV }}
