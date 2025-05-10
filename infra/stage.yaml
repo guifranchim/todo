@@ -1,8 +1,14 @@
+# --------------------------
+# Namespace
+# --------------------------
 apiVersion: v1
 kind: Namespace
 metadata:
   name: stage
 ---
+# --------------------------
+# PersistentVolume (hostPath example)
+# --------------------------
 apiVersion: v1
 kind: PersistentVolume
 metadata:
@@ -15,6 +21,9 @@ spec:
   hostPath:
     path: /mnt/data/mysql-stage
 ---
+# --------------------------
+# PersistentVolumeClaim
+# --------------------------
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -29,6 +38,9 @@ spec:
   volumeName: mysql-pv-stage
   storageClassName: standard
 ---
+# --------------------------
+# DB Secret
+# --------------------------
 apiVersion: v1
 kind: Secret
 metadata:
@@ -36,11 +48,14 @@ metadata:
   namespace: stage
 type: Opaque
 data:
-  MYSQL_ROOT_PASSWORD: bXlzcWw=    
-  MYSQL_DATABASE: dGFza3NfZGI=     
-  MYSQL_USER: bXlzcWw=            
-  MYSQL_PASSWORD: bXlzcWw=        
+  MYSQL_ROOT_PASSWORD: bXlzcWw=     # "mysql"
+  MYSQL_DATABASE: dGFza3NfZGI=      # "tasks_db"
+  MYSQL_USER: bXlzcWw=              # "mysql"
+  MYSQL_PASSWORD: bXlzcWw=          # "mysql"
 ---
+# --------------------------
+# MySQL Deployment & Service
+# --------------------------
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -101,6 +116,9 @@ spec:
     - port: 3306
       targetPort: 3306
 ---
+# --------------------------
+# Backend Deployment & Service
+# --------------------------
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -153,6 +171,9 @@ spec:
     - port: 3000
       targetPort: 3000
 ---
+# --------------------------
+# Frontend Deployment & Service
+# --------------------------
 apiVersion: apps/v1
 kind: Deployment
 metadata:
