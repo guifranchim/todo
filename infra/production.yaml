@@ -1,10 +1,14 @@
+# --------------------------
 # Namespace
+# --------------------------
 apiVersion: v1
 kind: Namespace
 metadata:
   name: production
-
+---
+# --------------------------
 # PersistentVolume
+# --------------------------
 apiVersion: v1
 kind: PersistentVolume
 metadata:
@@ -16,8 +20,10 @@ spec:
     - ReadWriteOnce
   hostPath:
     path: /mnt/data/mysql-production
-
-# PVC
+---
+# --------------------------
+# PersistentVolumeClaim
+# --------------------------
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -31,8 +37,10 @@ spec:
       storage: 10Gi
   volumeName: mysql-pv-production
   storageClassName: standard
-
-# Secret
+---
+# --------------------------
+# DB Secret
+# --------------------------
 apiVersion: v1
 kind: Secret
 metadata:
@@ -44,8 +52,10 @@ data:
   MYSQL_DATABASE: dGFza3NfZGI=
   MYSQL_USER: bXlzcWw=
   MYSQL_PASSWORD: bXlzcWw=
-
-# MySQL
+---
+# --------------------------
+# MySQL Deployment & Service
+# --------------------------
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -54,29 +64,45 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels: { app: mysql }
+    matchLabels:
+      app: mysql
   template:
-    metadata: { labels: { app: mysql } }
+    metadata:
+      labels:
+        app: mysql
     spec:
       containers:
         - name: mysql
           image: mysql:8.0
           env:
             - name: MYSQL_ROOT_PASSWORD
-              valueFrom: { secretKeyRef: { name: db-secret, key: MYSQL_ROOT_PASSWORD } }
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_ROOT_PASSWORD
             - name: MYSQL_DATABASE
-              valueFrom: { secretKeyRef: { name: db-secret, key: MYSQL_DATABASE } }
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_DATABASE
             - name: MYSQL_USER
-              valueFrom: { secretKeyRef: { name: db-secret, key: MYSQL_USER } }
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_USER
             - name: MYSQL_PASSWORD
-              valueFrom: { secretKeyRef: { name: db-secret, key: MYSQL_PASSWORD } }
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_PASSWORD
           volumeMounts:
             - name: mysql-storage
               mountPath: /var/lib/mysql
       volumes:
         - name: mysql-storage
-          persistentVolumeClaim: { claimName: mysql-pvc }
-
+          persistentVolumeClaim:
+            claimName: mysql-pvc
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -84,12 +110,15 @@ metadata:
   namespace: production
 spec:
   type: ClusterIP
-  selector: { app: mysql }
+  selector:
+    app: mysql
   ports:
     - port: 3306
       targetPort: 3306
-
-# Backend
+---
+# --------------------------
+# Backend Deployment & Service
+# --------------------------
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -98,20 +127,37 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels: { app: backend }
+    matchLabels:
+      app: backend
   template:
-    metadata: { labels: { app: backend } }
+    metadata:
+      labels:
+        app: backend
     spec:
       containers:
         - name: backend
           image: us-docker.pkg.dev/exalted-legacy-459419-m8/todolist-backend-repo/todolist-ua-back:latest
-          ports: [{ containerPort: 3000 }]
+          ports:
+            - containerPort: 3000
           env:
-            - name: DB_HOST    ; value: "db-service"
-            - name: DB_USER    ; valueFrom: { secretKeyRef: { name: db-secret, key: MYSQL_USER } }
-            - name: DB_PASSWORD; valueFrom: { secretKeyRef: { name: db-secret, key: MYSQL_PASSWORD } }
-            - name: DB_DATABASE; valueFrom: { secretKeyRef: { name: db-secret, key: MYSQL_DATABASE } }
-
+            - name: DB_HOST
+              value: "db-service"
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_PASSWORD
+            - name: DB_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: MYSQL_DATABASE
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -119,10 +165,15 @@ metadata:
   namespace: production
 spec:
   type: ClusterIP
-  selector: { app: backend }
-  ports: [{ port: 3000, targetPort: 3000 }]
-
-# Frontend
+  selector:
+    app: backend
+  ports:
+    - port: 3000
+      targetPort: 3000
+---
+# --------------------------
+# Frontend Deployment & Service
+# --------------------------
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -131,15 +182,19 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels: { app: frontend }
+    matchLabels:
+      app: frontend
   template:
-    metadata: { labels: { app: frontend } }
+    metadata:
+      labels:
+        app: frontend
     spec:
       containers:
         - name: frontend
           image: us-docker.pkg.dev/exalted-legacy-459419-m8/todolist-frontend-repo/todolist-ua-front:latest
-          ports: [{ containerPort: 80 }]
-
+          ports:
+            - containerPort: 80
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -147,5 +202,9 @@ metadata:
   namespace: production
 spec:
   type: NodePort
-  selector: { app: frontend }
-  ports: [{ port: 80, targetPort: 80, nodePort: 30081 }]
+  selector:
+    app: frontend
+  ports:
+    - port: 80
+      targetPort: 80
+      nodePort: 30081
