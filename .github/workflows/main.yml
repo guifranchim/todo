@@ -78,3 +78,22 @@ jobs:
           -n ${{ env.ENV }}
         kubectl rollout status deployment/backend  -n ${{ env.ENV }}
         kubectl rollout status deployment/frontend -n ${{ env.ENV }}
+
+    - name: Send Email Notification (SendGrid)
+      if: env.ENV == 'stage'
+      run: |
+        curl --request POST \
+          --url https://api.sendgrid.com/v3/mail/send \
+          --header "Authorization: Bearer ${{ secrets.SENDGRID_API_KEY }}" \
+          --header 'Content-Type: application/json' \
+          --data '{
+            "personalizations": [{
+              "to": [{"email": "guilhermefranchin2@gmail.com"}],
+              "subject": "Nova versão do sistema disponível em pré-produção"
+            }],
+            "from": {"email": "notificacoes@suaempresa.com"},
+            "content": [{
+              "type": "text/plain",
+              "value": "A nova versão da aplicação foi implantada no ambiente de pré-produção (stage). Tag: '${{ env.TAG }}'"
+            }]
+          }'
