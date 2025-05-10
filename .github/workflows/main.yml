@@ -91,7 +91,7 @@ jobs:
               "to": [{"email": "guilhermefranchin2@gmail.com"}],
               "subject": "Nova versão do sistema disponível em pré-produção"
             }],
-            "from": {"email": "notificacoes@suaempresa.com"},
+            "from": {"email": "guilherme@franch.in"},
             "content": [{
               "type": "text/plain",
               "value": "A nova versão da aplicação foi implantada no ambiente de pré-produção (stage). Tag: '${{ env.TAG }}'"
