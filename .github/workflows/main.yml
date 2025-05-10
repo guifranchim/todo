@@ -36,7 +36,8 @@ jobs:
           install_components: gke-gcloud-auth-plugin
 
       - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker us-docker.pkg.dev --quiet
+        run: |
+          gcloud auth configure-docker us-docker.pkg.dev --quiet
 
       - name: Build & Push Backend
         uses: docker/build-push-action@v4
@@ -44,7 +45,9 @@ jobs:
           context: ./backend
           file: ./backend/Dockerfile
           push: true
-          tags: us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.BACK_REPO }}/${{ env.IMAGE_REPO_BACK }}:${{ env.TAG }}
+          tags: |
+            us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.BACK_REPO }}/${{ env.IMAGE_REPO_BACK }}:${{ env.TAG }}
+            us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.BACK_REPO }}/${{ env.IMAGE_REPO_BACK }}:latest
 
       - name: Build & Push Frontend
         uses: docker/build-push-action@v4
@@ -52,7 +55,9 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}:${{ env.TAG }}
+          tags: |
+            us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}:${{ env.TAG }}
+            us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}:latest
 
       - name: Get GKE Credentials
         run: |
@@ -67,7 +72,7 @@ jobs:
       - name: Deploy app (${{ env.NAMESPACE }})
         run: |
           kubectl apply -f infra/${{ env.ENV_FILE }} \
-            --prune -l app=backend,app=frontend,app=mysql
+            --prune -l app=backend,app=frontend,app=mysql -n ${{ env.NAMESPACE }}
 
       - name: Update images (${{ env.NAMESPACE }})
         run: |
