@@ -7,10 +7,8 @@ on:
 
 jobs:
   build-and-deploy:
-    environment: aws
     runs-on: ubuntu-latest
 
-    # Job-level env carregadas no início
     env:
       AWS_REGION: us-east-2
       EKS_CLUSTER: todo-ua
@@ -35,7 +33,6 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region:            ${{ env.AWS_REGION }}
 
-      # Captura o Account ID e expõe como output
       - name: Get AWS Account ID
         id: aws_account
         run: |
@@ -47,7 +44,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      # Build & Push no Docker Hub
       - name: Build & Push Backend to Docker Hub
         uses: docker/build-push-action@v4
         with:
@@ -66,7 +62,6 @@ jobs:
           tags: |
             ${{ env.IMAGE_REPO_FRONT }}:${{ env.TAG }}
 
-      # Build & Push no Amazon ECR usando o account_id de output
       - name: Build & Push Backend to ECR
         uses: docker/build-push-action@v4
         with:
@@ -85,11 +80,10 @@ jobs:
           tags: |
             ${{ steps.aws_account.outputs.account_id }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.IMAGE_REPO_FRONT }}:${{ env.TAG }}
 
-      # Atualiza o kubeconfig e faz o rollout no EKS com shell expansion
       - name: Deploy to EKS
         run: |
-          # variáveis de ambiente dentro do shell
           AWS_ACCOUNT_ID=${{ steps.aws_account.outputs.account_id }}
+
           aws eks update-kubeconfig \
             --region $AWS_REGION \
             --name   $EKS_CLUSTER
