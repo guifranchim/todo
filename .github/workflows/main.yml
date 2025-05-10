@@ -9,7 +9,7 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    environment: ${{ github.ref == 'refs/heads/main' && 'gcp-production' || 'gcp-staging' }}
+    environment: gcp
     env:
       GCP_PROJECT: exalted-legacy-459419-m8
       GKE_CLUSTER: todo-ua
