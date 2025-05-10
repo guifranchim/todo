@@ -2,9 +2,7 @@ name: Build and Deploy to GKE
 
 on:
   push:
-    branches:
-      - main
-      - development
+    branches: [ main, development ]
 
 jobs:
   build-and-deploy:
@@ -20,17 +18,17 @@ jobs:
       IMAGE_REPO_FRONT: todolist-ua-front
       TAG: ${{ github.sha }}
       NAMESPACE: ${{ github.ref == 'refs/heads/main' && 'production' || 'stage' }}
+      ENV_FILE: ${{ github.ref == 'refs/heads/main' && 'production.yaml' || 'stage.yaml' }}
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v1
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Set up gcloud CLI (with GKE auth plugin)
+      - name: Set up gcloud CLI (incl. auth plugin)
         uses: google-github-actions/setup-gcloud@v1
         with:
           project_id: ${{ env.GCP_PROJECT }}
@@ -38,26 +36,23 @@ jobs:
           install_components: gke-gcloud-auth-plugin
 
       - name: Configure Docker for Artifact Registry
-        run: |
-          gcloud auth configure-docker us-docker.pkg.dev --quiet
+        run: gcloud auth configure-docker us-docker.pkg.dev --quiet
 
-      - name: Build & Push Backend to Artifact Registry
+      - name: Build & Push Backend
         uses: docker/build-push-action@v4
         with:
           context: ./backend
           file: ./backend/Dockerfile
           push: true
-          tags: |
-            us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.BACK_REPO }}/${{ env.IMAGE_REPO_BACK }}:${{ env.TAG }}
+          tags: us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.BACK_REPO }}/${{ env.IMAGE_REPO_BACK }}:${{ env.TAG }}
 
-      - name: Build & Push Frontend to Artifact Registry
+      - name: Build & Push Frontend
         uses: docker/build-push-action@v4
         with:
           context: .
           file: ./Dockerfile
           push: true
-          tags: |
-            us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}:${{ env.TAG }}
+          tags: us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}:${{ env.TAG }}
 
       - name: Get GKE Credentials
         run: |
@@ -65,39 +60,22 @@ jobs:
             --zone ${{ env.GKE_ZONE }} \
             --project ${{ env.GCP_PROJECT }}
 
-      - name: Ensure namespace exists
+      - name: Deploy infra (${{ env.NAMESPACE }})
         run: |
-          kubectl get namespace ${{ env.NAMESPACE }} || kubectl create namespace ${{ env.NAMESPACE }}
+          kubectl apply -f infra/${{ env.ENV_FILE }}
 
-      - name: Create MySQL PVC
+      - name: Deploy app (${{ env.NAMESPACE }})
         run: |
-          cat <<EOF | kubectl apply -f - -n ${{ env.NAMESPACE }}
-          apiVersion: v1
-          kind: PersistentVolumeClaim
-          metadata:
-            name: mysql-pvc
-          spec:
-            accessModes:
-              - ReadWriteOnce
-            resources:
-              requests:
-                storage: 5Gi
-            storageClassName: standard
-          EOF
+          kubectl apply -f infra/${{ env.ENV_FILE }} \
+            --prune -l app=backend,app=frontend,app=mysql
 
-      - name: Apply Kubernetes manifests
+      - name: Update images (${{ env.NAMESPACE }})
         run: |
-          kubectl apply -f infra/app.yaml -n ${{ env.NAMESPACE }}
-
-      - name: Deploy to GKE
-        run: |
-          kubectl set image deployment/${{ env.IMAGE_REPO_BACK }} \
-            ${{ env.IMAGE_REPO_BACK }}=us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.BACK_REPO }}/${{ env.IMAGE_REPO_BACK }}:${{ env.TAG }} \
-            --namespace ${{ env.NAMESPACE }}
-
-          kubectl set image deployment/${{ env.IMAGE_REPO_FRONT }} \
-            ${{ env.IMAGE_REPO_FRONT }}=us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}:${{ env.TAG }} \
-            --namespace ${{ env.NAMESPACE }}
-
-          kubectl rollout status deployment/${{ env.IMAGE_REPO_BACK }} --namespace ${{ env.NAMESPACE }}
-          kubectl rollout status deployment/${{ env.IMAGE_REPO_FRONT }} --namespace ${{ env.NAMESPACE }}
+          kubectl set image deployment/backend \
+            backend=us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.BACK_REPO }}/${{ env.IMAGE_REPO_BACK }}:${{ env.TAG }} \
+            -n ${{ env.NAMESPACE }}
+          kubectl set image deployment/frontend \
+            frontend=us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}:${{ env.TAG }} \
+            -n ${{ env.NAMESPACE }}
+          kubectl rollout status deployment/backend  -n ${{ env.NAMESPACE }}
+          kubectl rollout status deployment/frontend -n ${{ env.NAMESPACE }}
