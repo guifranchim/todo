@@ -175,7 +175,7 @@ spec:
   - port: 80
     targetPort: 80
     nodePort: 30081
-
+---
 apiVersion: networking.gke.io/v1
 kind: ManagedCertificate
 metadata:
