@@ -184,14 +184,14 @@ metadata:
 spec:
   domains:
     - dev.franch.in
-
+---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: frontend-ingress
   namespace: stage
   annotations:
-    kubernetes.io/ingress.global-static-ip-name: ingress-ip-franchin
+    kubernetes.io/ingress.global-static-ip-name: ingress-ip-dev
     networking.gke.io/managed-certificates: dev-cert
     kubernetes.io/ingress.class: "gce"
 spec:
