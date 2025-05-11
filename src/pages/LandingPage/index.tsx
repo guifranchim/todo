@@ -7,7 +7,7 @@ function LandingPage() {
     <section className={styles.container}>
       <article className={styles.title_container}>
         <h1>To do List PROD</h1>
-        <h2>Desafio do Ignite</h2>
+        <h2>Desafio do Ignite PRODUCAO TESTE VIDEO</h2>
       </article>
       <article>
         <Link to="/to-do">
