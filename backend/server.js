@@ -4,18 +4,20 @@ const { v4: uuidv4 } = require('uuid');
 const cors = require('cors');
 
 const db = mysql.createConnection({
-  host: process.env.DB_HOST || '10.0.124.144',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || 'rootpassword',
-  database: process.env.DB_NAME || 'tasks_db',
+  host: process.env.DB_HOST || 'db-service',
+  user: process.env.DB_USER || 'mysql',
+  password: process.env.DB_PASSWORD || 'mysql',
+  database: process.env.DB_DATABASE || 'tasks_db', 
 });
 
+console.log('Conectando ao banco com as seguintes credenciais:');
 console.log({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME
-})
+  host: process.env.DB_HOST || 'db-service',
+  user: process.env.DB_USER || 'mysql',
+  password: process.env.DB_PASSWORD || 'mysql',
+  database: process.env.DB_DATABASE || 'tasks_db'
+});
+
 db.connect((err) => {
   if (err) {
     console.log(err)
