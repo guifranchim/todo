@@ -74,7 +74,7 @@
     - name: Fazer pull das imagens Docker (usando docker compose)
       community.docker.docker_compose_v2: 
         project_src: "{{ app_dir }}"
-        pull: yes
+        pull: always
 
     - name: Iniciar containers com Docker Compose
       community.docker.docker_compose_v2: 
