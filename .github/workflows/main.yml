@@ -169,7 +169,8 @@ jobs:
             --extra-vars "secrets_db_user_password=SENHASECRETAusuario" \
             --extra-vars "secrets_db_root_password=SENHASECRETAmaster" \
             --extra-vars "db_database_name=tasks_db" \
-            --extra-vars "backend_host_port=8080" 
+            --extra-vars "backend_host_port=8080" \
+            --extra-vars "app_env=${{ env.APP_ENV }}"
         working-directory: ${{ env.ANSIBLE_DIR }}
 
       - name: Send Email Notification (SendGrid)
