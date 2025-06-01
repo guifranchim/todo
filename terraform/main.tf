@@ -81,3 +81,9 @@ resource "google_compute_firewall" "allow_backend_app" {
     source_ranges = ["0.0.0.0/0"] 
     target_tags   = ["http-server"] 
 }
+
+terraform {
+  backend "gcs" {
+    bucket  = "tf-state-261909652337-bucket" 
+  }
+}
