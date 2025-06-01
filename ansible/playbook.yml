@@ -47,7 +47,7 @@
           - docker-ce-cli
           - containerd.io
           - docker-buildx-plugin
-          - docker-compose-plugin 
+          - docker-compose-plugin
         state: present
         update_cache: yes
       notify: Iniciar Docker
@@ -61,41 +61,31 @@
 
     - name: Criar diretório da aplicação
       ansible.builtin.file:
-        path: "{{ app_dir }}" 
+        path: "{{ app_dir }}"
         state: directory
         mode: '0755'
 
-    - name: Instalar Google Cloud SDK (usando role, se necessário)
-      ansible.builtin.include_role:
-        name: google.cloud.sdk
-    
-    - name: Autenticar Docker com o Google Artifact Registry (via gcloud na VM)
-      ansible.builtin.command: gcloud auth configure-docker us-docker.pkg.dev --quiet
-      changed_when: false
-      environment:
-        PATH: "/usr/local/bin:/usr/bin:/bin:/snap/bin" 
-      
     - name: Copiar template do Docker Compose para a VM
       ansible.builtin.template:
-        src: templates/docker-compose.yml.j2 
+        src: templates/docker-compose.yml.j2
         dest: "{{ app_dir }}/docker-compose.yml"
         mode: '0644'
-    
+
     - name: Fazer pull das imagens Docker (usando docker compose)
-      community.docker.docker_compose_v2:
+      community.docker.docker_compose_v2: 
         project_src: "{{ app_dir }}"
         pull: yes
-      
+
     - name: Iniciar containers com Docker Compose
-      community.docker.docker_compose_v2:
+      community.docker.docker_compose_v2: 
         project_src: "{{ app_dir }}"
-        state: present 
-        restarted: yes 
-        remove_orphans: yes 
-  
+        state: present
+        restarted: yes
+        remove_orphans: yes
+
   handlers:
     - name: Iniciar Docker
       ansible.builtin.service:
         name: docker
         state: started
-        enabled: yes 
+        enabled: yes
