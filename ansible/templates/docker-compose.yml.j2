@@ -1,0 +1,61 @@
+
+version: '3.8'
+services:
+  db:
+    image: mysql:8.0 
+    container_name: "{{ db_container_name | default('mysql_db') }}-{{ app_env }}"
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: "{{ secrets_db_root_password | default('rootpasswordsegura') }}" 
+      MYSQL_DATABASE: "{{ db_database_name | default('tasks_db') }}"
+      MYSQL_USER: "{{ db_user | default('mysqluser') }}"             
+      MYSQL_PASSWORD: "{{ secrets_db_user_password | default('mysqlpasswordsegura') }}" 
+    volumes:
+      - mysql_data:/var/lib/mysql 
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost", "-u$$MYSQL_USER", "-p$$MYSQL_PASSWORD"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+
+  backend:
+    image: us-docker.pkg.dev/{{ gcp_project_id }}/{{ backend_artifact_repo }}/{{ backend_image_name }}:{{ image_tag }}
+    container_name: "{{ backend_image_name }}-{{ app_env }}"
+    restart: always
+    ports:
+      - "{{ backend_host_port | default('8080') }}:3000" 
+    environment:
+      NODE_ENV: "{{ app_env | default('development') }}"
+      
+      DB_HOST: "db" 
+      DB_USER: "{{ db_user | default('mysqluser') }}"
+      DB_PASSWORD: "{{ secrets_db_user_password | default('mysqlpasswordsegura') }}" 
+      DB_DATABASE: "{{ db_database_name | default('tasks_db') }}"
+      
+    depends_on:
+      db: 
+        condition: service_healthy 
+    networks:
+      - app-network
+    
+  frontend:
+    image: us-docker.pkg.dev/{{ gcp_project_id }}/{{ frontend_artifact_repo }}/{{ frontend_image_name }}:{{ image_tag }}
+    container_name: "{{ frontend_image_name }}-{{ app_env }}"
+    ports:
+      - "{{ frontend_port_mapping | default('80:80') }}" 
+    restart: always
+    environment:
+      NODE_ENV: "{{ app_env | default('development') }}"
+    depends_on:
+      - backend 
+    networks:
+      - app-network
+
+volumes:
+  mysql_data: 
+
+networks:
+  app-network:
+    driver: bridge
