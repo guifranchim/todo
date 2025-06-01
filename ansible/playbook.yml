@@ -65,6 +65,29 @@
         state: directory
         mode: '0755'
 
+    - name: Importar chave pública do Google Cloud (para gcloud CLI)
+      ansible.builtin.apt_key:
+        url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+        state: present
+
+    - name: Adicionar repositório apt do Google Cloud SDK (para gcloud CLI)
+      ansible.builtin.apt_repository:
+        repo: deb https://packages.cloud.google.com/apt cloud-sdk main
+        state: present
+        filename: google-cloud-sdk
+        update_cache: yes
+
+    - name: Instalar Google Cloud CLI
+      ansible.builtin.apt:
+        name: google-cloud-cli
+        state: present
+
+    - name: Autenticar Docker com o Google Artifact Registry (via gcloud na VM)
+      ansible.builtin.command: gcloud auth configure-docker us-docker.pkg.dev --quiet
+      changed_when: false
+      environment:
+        PATH: "{{ ansible_env.PATH }}:/usr/local/bin:/snap/bin" 
+
     - name: Copiar template do Docker Compose para a VM
       ansible.builtin.template:
         src: templates/docker-compose.yml.j2
