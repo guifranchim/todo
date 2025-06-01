@@ -24,6 +24,7 @@ jobs:
   build-and-push-images:
     name: Build and Push Docker Images
     runs-on: ubuntu-latest
+    environment: gcp
     permissions:
       contents: 'read'
       id-token: 'write' 
@@ -66,6 +67,7 @@ jobs:
   provision-and-deploy:
     name: Provision Infrastructure and Deploy Application
     runs-on: ubuntu-latest
+    environment: gcp
     needs: build-and-push-images 
     permissions:
       contents: 'read'
