@@ -164,7 +164,7 @@ jobs:
             --extra-vars "frontend_image_name=${{ env.FRONTEND_IMAGE_NAME }}" \
             --extra-vars "image_tag=${{ env.IMAGE_TAG }}" \
             --extra-vars "app_dir=/opt/app-${{ env.APP_ENV }}" \
-            --extra-vars "ssh_user_on_vm=${{ env.SSH_USER_ON_VM }}"
+            --extra-vars "ssh_user_on_vm=${{ env.SSH_USER_ON_VM }}" \
             --extra-vars "db_user=tasks_user" \
             --extra-vars "secrets_db_user_password=SENHASECRETAusuario" \
             --extra-vars "secrets_db_root_password=SENHASECRETAmaster" \
