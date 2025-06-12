@@ -1,50 +1,63 @@
-name: Build, Provision VM, and Deploy with Ansible
+
+name: Build and Deploy in Parallel (GKE and VM)
+
 
 on:
   push:
     branches: [ main, development ]
   workflow_dispatch: 
 
+
 env:
-  GCP_PROJECT_ID: exalted-legacy-459419-m8 
-  GCP_REGION: southamerica-east1 
-  GCP_ZONE: southamerica-east1-a  
-  BACKEND_ARTIFACT_REPO: todolist-backend-repo 
-  FRONTEND_ARTIFACT_REPO: todolist-frontend-repo 
-  BACKEND_IMAGE_NAME: todolist-ua-back 
-  FRONTEND_IMAGE_NAME: todolist-ua-front 
-  IMAGE_TAG: ${{ github.sha }}
   
+  GCP_PROJECT_ID: exalted-legacy-459419-m8
+  GCP_REGION: southamerica-east1
+  GCP_ZONE: southamerica-east1-a
+
+  
+  GKE_CLUSTER: todo-ua
+
+  
+  BACKEND_ARTIFACT_REPO: todolist-backend-repo
+  FRONTEND_ARTIFACT_REPO: todolist-frontend-repo
+  BACKEND_IMAGE_NAME: todolist-ua-back
+  FRONTEND_IMAGE_NAME: todolist-ua-front
+
+  
+  IMAGE_TAG: ${{ github.sha }}
   APP_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'stage' }}
+
+  
   TERRAFORM_DIR: ./terraform
   ANSIBLE_DIR: ./ansible
-  SSH_USER_ON_VM: githubactions 
+  SSH_USER_ON_VM: githubactions
 
 jobs:
+  
   build-and-push-images:
     name: Build and Push Docker Images
     runs-on: ubuntu-latest
     environment: gcp
     permissions:
       contents: 'read'
-      id-token: 'write' 
+      id-token: 'write'
 
     steps:
-      - name: Checkout code
+      - name: Checkout do código
         uses: actions/checkout@v4
 
-      - name: Authenticate to Google Cloud
+      - name: Autenticar no Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }} 
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Setup gcloud CLI
+      - name: Configurar a CLI gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Configure Docker to use gcloud credential helper
+      - name: Configurar o Docker para usar as credenciais do gcloud
         run: gcloud auth configure-docker us-docker.pkg.dev --quiet
 
-      - name: Build and Push Backend Image
+      - name: Construir e enviar a imagem do Backend
         uses: docker/build-push-action@v5
         with:
           context: ./backend
@@ -54,54 +67,111 @@ jobs:
             us-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.BACKEND_ARTIFACT_REPO }}/${{ env.BACKEND_IMAGE_NAME }}:${{ env.IMAGE_TAG }}
             us-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.BACKEND_ARTIFACT_REPO }}/${{ env.BACKEND_IMAGE_NAME }}:latest-${{ env.APP_ENV }}
 
-      - name: Build and Push Frontend Image
+      - name: Construir e enviar a imagem do Frontend
         uses: docker/build-push-action@v5
         with:
-          context: . 
-          file: ./Dockerfile 
+          context: .
+          file: ./Dockerfile
           push: true
           tags: |
             us-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.FRONTEND_ARTIFACT_REPO }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ env.IMAGE_TAG }}
             us-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.FRONTEND_ARTIFACT_REPO }}/${{ env.FRONTEND_IMAGE_NAME }}:latest-${{ env.APP_ENV }}
 
-  provision-and-deploy:
-    name: Provision Infrastructure and Deploy Application
+  
+  deploy-to-gke:
+    name: Deploy to GKE
     runs-on: ubuntu-latest
     environment: gcp
     needs: build-and-push-images 
-    permissions:
-      contents: 'read'
-      id-token: 'write'
 
     steps:
-      - name: Checkout code
+      - name: Checkout do código
         uses: actions/checkout@v4
 
-      - name: Authenticate to Google Cloud (for Terraform)
+      - name: Autenticar no Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Configurar gcloud & kubectl
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          export_default_credentials: true
+          install_components: gke-gcloud-auth-plugin
+
+      - name: Obter credenciais do GKE
+        run: |
+          gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} \
+            --zone ${{ env.GCP_ZONE }} \
+            --project ${{ env.GCP_PROJECT_ID }}
+
+      - name: Aplicar recursos do Kubernetes
+        run: |
+          
+          kubectl apply -f infra/${{ env.APP_ENV }}.yaml
+
+      - name: Atualizar imagens e aguardar o rollout
+        run: |
+          kubectl set image deployment/backend \
+            backend=us-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.BACKEND_ARTIFACT_REPO }}/${{ env.BACKEND_IMAGE_NAME }}:${{ env.IMAGE_TAG }} \
+            -n ${{ env.APP_ENV }}
+          kubectl set image deployment/frontend \
+            frontend=us-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.FRONTEND_ARTIFACT_REPO }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ env.IMAGE_TAG }} \
+            -n ${{ env.APP_ENV }}
+          
+          echo "Aguardando o rollout do backend..."
+          kubectl rollout status deployment/backend -n ${{ env.APP_ENV }} --timeout=5m
+          
+          echo "Aguardando o rollout do frontend..."
+          kubectl rollout status deployment/frontend -n ${{ env.APP_ENV }} --timeout=5m
+
+      - name: Enviar Notificação por Email (SendGrid)
+        if: env.APP_ENV == 'stage' && success()
+        run: |
+          curl --request POST \
+            --url https://api.sendgrid.com/v3/mail/send \
+            --header "Authorization: Bearer ${{ secrets.SENDGRID_API_KEY }}" \
+            --header 'Content-Type: application/json' \
+            --data '{
+              "personalizations": [{
+                "to": [{"email": "guilhermefranchin2@gmail.com"}],
+                "subject": "Deploy em GKE (${{ env.APP_ENV }}) concluído com sucesso!"
+              }],
+              "from": {"email": "guilherme@franch.in"},
+              "content": [{
+                "type": "text/plain",
+                "value": "A nova versão da aplicação foi implantada no GKE no ambiente de pré-produção (stage). Tag: ${{ env.IMAGE_TAG }}"
+              }]
+            }'
+
+  
+  deploy-to-vm:
+    name: Provision VM and Deploy with Ansible
+    runs-on: ubuntu-latest
+    environment: gcp
+    needs: build-and-push-images 
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Autenticar no Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }} 
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Setup Terraform
+      - name: Configurar o Terraform
         uses: hashicorp/setup-terraform@v3
-        
-        
 
       - name: Terraform Init
-        id: init
         run: |
           terraform init \
             -backend-config="bucket=tf-state-261909652337-bucket" \
             -backend-config="prefix=terraform/state/${{ env.APP_ENV }}"
         working-directory: ${{ env.TERRAFORM_DIR }}
 
-      - name: Terraform Validate
-        id: validate
-        run: terraform validate -no-color
-        working-directory: ${{ env.TERRAFORM_DIR }}
-
       - name: Terraform Plan
-        id: plan
         run: |
           terraform plan \
             -var="gcp_project_id=${{ env.GCP_PROJECT_ID }}" \
@@ -114,19 +184,18 @@ jobs:
         working-directory: ${{ env.TERRAFORM_DIR }}
 
       - name: Terraform Apply
-        id: apply
         run: terraform apply -auto-approve tfplan
         working-directory: ${{ env.TERRAFORM_DIR }}
 
-      - name: Get VM Public IP from Terraform Output
+      - name: Obter IP público da VM
         id: get_ip
         run: |
           VM_IP=$(terraform output -raw instance_public_ip)
           echo "VM_PUBLIC_IP=$VM_IP" >> $GITHUB_ENV
-          echo "VM IP: $VM_IP"
+          echo "IP da VM: $VM_IP"
         working-directory: ${{ env.TERRAFORM_DIR }}
 
-      - name: Setup SSH Agent and Add Private Key for Ansible
+      - name: Configurar SSH para o Ansible
         env:
           ANSIBLE_SSH_PRIVATE_KEY: ${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}
         run: |
@@ -135,25 +204,21 @@ jobs:
           chmod 600 ~/.ssh/id_rsa_ansible
           eval "$(ssh-agent -s)"
           ssh-add ~/.ssh/id_rsa_ansible
-          echo "StrictHostKeyChecking no" > ~/.ssh/config
-          echo "UserKnownHostsFile /dev/null" >> ~/.ssh/config
-          chmod 600 ~/.ssh/config
+          ssh-keyscan -H "${{ env.VM_PUBLIC_IP }}" >> ~/.ssh/known_hosts
 
-      - name: Install Ansible and Collections
+      - name: Instalar Ansible e coleções
         run: |
           python -m pip install --upgrade pip
           pip install ansible
           ansible-galaxy collection install community.docker google.cloud
 
-      - name: Create Ansible Inventory File
+      - name: Criar inventário do Ansible
         run: |
           echo "[gcp_vms]" > inventory.ini
           echo "${{ env.VM_PUBLIC_IP }} ansible_user=${{ env.SSH_USER_ON_VM }} ansible_ssh_private_key_file=~/.ssh/id_rsa_ansible" >> inventory.ini
-          echo "Created inventory.ini:"
-          cat inventory.ini
         working-directory: ${{ env.ANSIBLE_DIR }}
 
-      - name: Run Ansible Playbook
+      - name: Executar o Playbook do Ansible
         run: |
           ansible-playbook playbook.yml \
             -i inventory.ini \
@@ -173,8 +238,8 @@ jobs:
             --extra-vars "app_env=${{ env.APP_ENV }}"
         working-directory: ${{ env.ANSIBLE_DIR }}
 
-      - name: Send Email Notification (SendGrid)
-        if: env.APP_ENV == 'stage' && success() 
+      - name: Enviar Notificação por Email (SendGrid)
+        if: env.APP_ENV == 'stage' && success()
         run: |
           curl --request POST \
             --url https://api.sendgrid.com/v3/mail/send \
@@ -183,11 +248,12 @@ jobs:
             --data '{
               "personalizations": [{
                 "to": [{"email": "guilhermefranchin2@gmail.com"}],
-                "subject": "Nova versão do sistema (${{ env.APP_ENV }}) disponível na VM"
+                "subject": "Deploy em VM (${{ env.APP_ENV }}) concluído com sucesso!"
               }],
               "from": {"email": "guilherme@franch.in"},
               "content": [{
                 "type": "text/plain",
-                "value": "A nova versão da aplicação foi implantada na VM do ambiente ${{ env.APP_ENV }}. IP: ${{ env.VM_PUBLIC_IP }}. Tag: ${{ env.IMAGE_TAG }}"
+                "value": "A nova versão da aplicação foi implantada na VM no ambiente ${{ env.APP_ENV }}. IP: ${{ env.VM_PUBLIC_IP }}. Tag: ${{ env.IMAGE_TAG }}"
               }]
             }'
+
