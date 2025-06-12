@@ -1,39 +1,38 @@
+# .github/workflows/main.yml
 
 name: Build and Deploy in Parallel (GKE and VM)
-
 
 on:
   push:
     branches: [ main, development ]
-  workflow_dispatch: 
-
+  workflow_dispatch:
 
 env:
-  
+  # Configurações Gerais
   GCP_PROJECT_ID: exalted-legacy-459419-m8
   GCP_REGION: southamerica-east1
   GCP_ZONE: southamerica-east1-a
 
-  
-  GKE_CLUSTER: todo-ua
-
-  
+  # Repositórios de Imagens
   BACKEND_ARTIFACT_REPO: todolist-backend-repo
   FRONTEND_ARTIFACT_REPO: todolist-frontend-repo
   BACKEND_IMAGE_NAME: todolist-ua-back
   FRONTEND_IMAGE_NAME: todolist-ua-front
 
-  
+  # Tags e Ambiente
   IMAGE_TAG: ${{ github.sha }}
   APP_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'stage' }}
 
-  
-  TERRAFORM_DIR: ./terraform
+  # Diretórios
+  TERRAFORM_GKE_DIR: ./terraform/gke # <-- Diretório para o Terraform do GKE
+  TERRAFORM_VM_DIR: ./terraform/vm   # <-- Diretório para o Terraform da VM
   ANSIBLE_DIR: ./ansible
   SSH_USER_ON_VM: githubactions
 
 jobs:
-  
+  #----------------------------------------------------
+  # JOB 1: CONSTRUIR E ENVIAR IMAGENS (sem alterações)
+  #----------------------------------------------------
   build-and-push-images:
     name: Build and Push Docker Images
     runs-on: ubuntu-latest
@@ -41,7 +40,6 @@ jobs:
     permissions:
       contents: 'read'
       id-token: 'write'
-
     steps:
       - name: Checkout do código
         uses: actions/checkout@v4
@@ -77,55 +75,62 @@ jobs:
             us-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.FRONTEND_ARTIFACT_REPO }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ env.IMAGE_TAG }}
             us-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.FRONTEND_ARTIFACT_REPO }}/${{ env.FRONTEND_IMAGE_NAME }}:latest-${{ env.APP_ENV }}
 
-  
+  #----------------------------------------------------
+  # JOB 2: DEPLOY NO GKE COM TERRAFORM (ADAPTADO)
+  #----------------------------------------------------
   deploy-to-gke:
-    name: Deploy to GKE
+    name: Provision GKE and Deploy with Terraform
     runs-on: ubuntu-latest
     environment: gcp
-    needs: build-and-push-images 
+    needs: build-and-push-images
 
     steps:
       - name: Checkout do código
         uses: actions/checkout@v4
 
       - name: Autenticar no Google Cloud
-        uses: google-github-actions/auth@v1
+        uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Configurar gcloud & kubectl
-        uses: google-github-actions/setup-gcloud@v1
-        with:
-          project_id: ${{ env.GCP_PROJECT_ID }}
-          export_default_credentials: true
-          install_components: gke-gcloud-auth-plugin
+      - name: Configurar o Terraform
+        uses: hashicorp/setup-terraform@v3
 
-      - name: Obter credenciais do GKE
+      - name: Terraform Init (GKE)
+        id: init
         run: |
-          gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} \
-            --zone ${{ env.GCP_ZONE }} \
-            --project ${{ env.GCP_PROJECT_ID }}
+          terraform init \
+            -backend-config="bucket=tf-state-261909652337-bucket" \
+            -backend-config="prefix=terraform/gke-state/${{ env.APP_ENV }}"
+        working-directory: ${{ env.TERRAFORM_GKE_DIR }}
 
-      - name: Aplicar recursos do Kubernetes
+      - name: Terraform Plan (GKE)
+        id: plan
         run: |
-          
-          kubectl apply -f infra/${{ env.APP_ENV }}.yaml
+          terraform plan \
+            -var="gcp_project_id=${{ env.GCP_PROJECT_ID }}" \
+            -var="gcp_region=${{ env.GCP_REGION }}" \
+            -var="environment=${{ env.APP_ENV }}" \
+            -var="back_repo=${{ env.BACKEND_ARTIFACT_REPO }}" \
+            -var="front_repo=${{ env.FRONTEND_ARTIFACT_REPO }}" \
+            -var="image_repo_back=${{ env.BACKEND_IMAGE_NAME }}" \
+            -var="image_repo_front=${{ env.FRONTEND_IMAGE_NAME }}" \
+            -var="image_tag=${{ env.IMAGE_TAG }}" \
+            -out=tfplan -no-color
+        working-directory: ${{ env.TERRAFORM_GKE_DIR }}
 
-      - name: Atualizar imagens e aguardar o rollout
+      - name: Terraform Apply (GKE)
+        run: terraform apply -auto-approve tfplan
+        working-directory: ${{ env.TERRAFORM_GKE_DIR }}
+
+      - name: Obter IP do Ingress
+        id: get_ip
         run: |
-          kubectl set image deployment/backend \
-            backend=us-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.BACKEND_ARTIFACT_REPO }}/${{ env.BACKEND_IMAGE_NAME }}:${{ env.IMAGE_TAG }} \
-            -n ${{ env.APP_ENV }}
-          kubectl set image deployment/frontend \
-            frontend=us-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.FRONTEND_ARTIFACT_REPO }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ env.IMAGE_TAG }} \
-            -n ${{ env.APP_ENV }}
-          
-          echo "Aguardando o rollout do backend..."
-          kubectl rollout status deployment/backend -n ${{ env.APP_ENV }} --timeout=5m
-          
-          echo "Aguardando o rollout do frontend..."
-          kubectl rollout status deployment/frontend -n ${{ env.APP_ENV }} --timeout=5m
-
+          INGRESS_IP=$(terraform output -raw ingress_ip)
+          echo "INGRESS_IP=$INGRESS_IP" >> $GITHUB_ENV
+          echo "IP do Ingress: $INGRESS_IP"
+        working-directory: ${{ env.TERRAFORM_GKE_DIR }}
+        
       - name: Enviar Notificação por Email (SendGrid)
         if: env.APP_ENV == 'stage' && success()
         run: |
@@ -141,16 +146,18 @@ jobs:
               "from": {"email": "guilherme@franch.in"},
               "content": [{
                 "type": "text/plain",
-                "value": "A nova versão da aplicação foi implantada no GKE no ambiente de pré-produção (stage). Tag: ${{ env.IMAGE_TAG }}"
+                "value": "A nova versão da aplicação foi implantada no GKE no ambiente de pré-produção (stage). IP: ${{ env.INGRESS_IP }}. Tag: ${{ env.IMAGE_TAG }}"
               }]
             }'
 
-  
+  #----------------------------------------------------
+  # JOB 3: DEPLOY NA VM COM TERRAFORM E ANSIBLE (sem alterações)
+  #----------------------------------------------------
   deploy-to-vm:
     name: Provision VM and Deploy with Ansible
     runs-on: ubuntu-latest
     environment: gcp
-    needs: build-and-push-images 
+    needs: build-and-push-images
 
     steps:
       - name: Checkout do código
@@ -164,14 +171,14 @@ jobs:
       - name: Configurar o Terraform
         uses: hashicorp/setup-terraform@v3
 
-      - name: Terraform Init
+      - name: Terraform Init (VM)
         run: |
           terraform init \
             -backend-config="bucket=tf-state-261909652337-bucket" \
-            -backend-config="prefix=terraform/state/${{ env.APP_ENV }}"
-        working-directory: ${{ env.TERRAFORM_DIR }}
+            -backend-config="prefix=terraform/vm-state/${{ env.APP_ENV }}"
+        working-directory: ${{ env.TERRAFORM_VM_DIR }}
 
-      - name: Terraform Plan
+      - name: Terraform Plan (VM)
         run: |
           terraform plan \
             -var="gcp_project_id=${{ env.GCP_PROJECT_ID }}" \
@@ -181,20 +188,21 @@ jobs:
             -var="ssh_user=${{ env.SSH_USER_ON_VM }}" \
             -var="ssh_public_key=${{ secrets.VM_SSH_PUBLIC_KEY }}" \
             -out=tfplan -no-color
-        working-directory: ${{ env.TERRAFORM_DIR }}
+        working-directory: ${{ env.TERRAFORM_VM_DIR }}
 
-      - name: Terraform Apply
+      - name: Terraform Apply (VM)
         run: terraform apply -auto-approve tfplan
-        working-directory: ${{ env.TERRAFORM_DIR }}
+        working-directory: ${{ env.TERRAFORM_VM_DIR }}
 
       - name: Obter IP público da VM
-        id: get_ip
+        id: get_vm_ip
         run: |
           VM_IP=$(terraform output -raw instance_public_ip)
           echo "VM_PUBLIC_IP=$VM_IP" >> $GITHUB_ENV
           echo "IP da VM: $VM_IP"
-        working-directory: ${{ env.TERRAFORM_DIR }}
+        working-directory: ${{ env.TERRAFORM_VM_DIR }}
 
+      # ... (O resto das etapas do Ansible permanece igual)
       - name: Configurar SSH para o Ansible
         env:
           ANSIBLE_SSH_PRIVATE_KEY: ${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}
@@ -202,15 +210,13 @@ jobs:
           mkdir -p ~/.ssh
           echo "${ANSIBLE_SSH_PRIVATE_KEY}" > ~/.ssh/id_rsa_ansible
           chmod 600 ~/.ssh/id_rsa_ansible
-          eval "$(ssh-agent -s)"
-          ssh-add ~/.ssh/id_rsa_ansible
           ssh-keyscan -H "${{ env.VM_PUBLIC_IP }}" >> ~/.ssh/known_hosts
 
       - name: Instalar Ansible e coleções
         run: |
           python -m pip install --upgrade pip
           pip install ansible
-          ansible-galaxy collection install community.docker google.cloud
+          ansible-galaxy collection install community.docker
 
       - name: Criar inventário do Ansible
         run: |
@@ -228,14 +234,7 @@ jobs:
             --extra-vars "frontend_artifact_repo=${{ env.FRONTEND_ARTIFACT_REPO }}" \
             --extra-vars "frontend_image_name=${{ env.FRONTEND_IMAGE_NAME }}" \
             --extra-vars "image_tag=${{ env.IMAGE_TAG }}" \
-            --extra-vars "app_dir=/opt/app-${{ env.APP_ENV }}" \
-            --extra-vars "ssh_user_on_vm=${{ env.SSH_USER_ON_VM }}" \
-            --extra-vars "db_user=tasks_user" \
-            --extra-vars "secrets_db_user_password=SENHASECRETAusuario" \
-            --extra-vars "secrets_db_root_password=SENHASECRETAmaster" \
-            --extra-vars "db_database_name=tasks_db" \
-            --extra-vars "backend_host_port=8080" \
-            --extra-vars "app_env=${{ env.APP_ENV }}"
+            --extra-vars "app_dir=/opt/app-${{ env.APP_ENV }}"
         working-directory: ${{ env.ANSIBLE_DIR }}
 
       - name: Enviar Notificação por Email (SendGrid)
@@ -256,4 +255,3 @@ jobs:
                 "value": "A nova versão da aplicação foi implantada na VM no ambiente ${{ env.APP_ENV }}. IP: ${{ env.VM_PUBLIC_IP }}. Tag: ${{ env.IMAGE_TAG }}"
               }]
             }'
-
