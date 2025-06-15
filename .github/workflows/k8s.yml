@@ -36,6 +36,9 @@ jobs:
         export_default_credentials: true
         install_components: gke-gcloud-auth-plugin
 
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+
     - name: Terraform Init
       id: init
       run: |
