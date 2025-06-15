@@ -1,0 +1,99 @@
+name: Build and Deploy to GKE
+
+on:
+  push:
+    branches: [ main, development ]
+
+env:
+  GCP_PROJECT: exalted-legacy-459419-m8
+  GKE_CLUSTER: todo-ua
+  GKE_ZONE: southamerica-east1-a
+  BACK_REPO: todolist-backend-repo
+  FRONT_REPO: todolist-frontend-repo
+  IMAGE_REPO_BACK: todolist-ua-back
+  IMAGE_REPO_FRONT: todolist-ua-front
+  TAG: ${{ github.sha }}
+  ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'stage' }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: gcp
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Authenticate to GCP
+      uses: google-github-actions/auth@v1
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+    - name: Setup gcloud & kubectl
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        project_id: ${{ env.GCP_PROJECT }}
+        export_default_credentials: true
+        install_components: gke-gcloud-auth-plugin
+
+    - name: Configure Docker
+      run: gcloud auth configure-docker us-docker.pkg.dev --quiet
+
+    - name: Build & Push Backend
+      uses: docker/build-push-action@v4
+      with:
+        context: ./backend
+        file: ./backend/Dockerfile
+        push: true
+        tags: |
+          us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.BACK_REPO }}/${{ env.IMAGE_REPO_BACK }}:${{ env.TAG }}
+          us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.BACK_REPO }}/${{ env.IMAGE_REPO_BACK }}:latest
+
+    - name: Build & Push Frontend
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        file: ./Dockerfile
+        push: true
+        tags: |
+          us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}:${{ env.TAG }}
+          us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}:latest
+
+    - name: Get GKE credentials
+      run: |
+        gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} \
+          --zone ${{ env.GKE_ZONE }} \
+          --project ${{ env.GCP_PROJECT }}
+
+    - name: Deploy all resources
+      run: |
+        kubectl apply -f infra/k8s/${{ env.ENV }}.yaml
+
+    - name: Update images & wait rollout
+      run: |
+        kubectl set image deployment/backend \
+          backend=us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.BACK_REPO }}/${{ env.IMAGE_REPO_BACK }}:${{ env.TAG }} \
+          -n ${{ env.ENV }}
+        kubectl set image deployment/frontend \
+          frontend=us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}:${{ env.TAG }} \
+          -n ${{ env.ENV }}
+        kubectl rollout status deployment/backend  -n ${{ env.ENV }}
+        kubectl rollout status deployment/frontend -n ${{ env.ENV }}
+
+    - name: Send Email Notification (SendGrid)
+      if: env.ENV == 'stage'
+      run: |
+        curl --request POST \
+          --url https://api.sendgrid.com/v3/mail/send \
+          --header "Authorization: Bearer ${{ secrets.SENDGRID_API_KEY }}" \
+          --header 'Content-Type: application/json' \
+          --data '{
+            "personalizations": [{
+              "to": [{"email": "guilhermefranchin2@gmail.com"}],
+              "subject": "Nova versão do sistema disponível em pré-produção"
+            }],
+            "from": {"email": "guilherme@franch.in"},
+            "content": [{
+              "type": "text/plain",
+              "value": "A nova versão da aplicação foi implantada no ambiente de pré-produção (stage). Tag: '${{ env.TAG }}'"
+            }]
+          }'
