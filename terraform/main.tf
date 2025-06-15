@@ -20,17 +20,11 @@ resource "google_compute_instance" "vm_instance" {
   network_interface {
     network = var.network_name
     access_config {
-
     }
   }
 
   metadata = {
     ssh-keys = "${var.ssh_user}:${var.ssh_public_key}"
-
-
-
-
-
   }
 
 

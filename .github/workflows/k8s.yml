@@ -14,6 +14,7 @@ env:
   IMAGE_REPO_FRONT: todolist-ua-front
   TAG: ${{ github.sha }}
   ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'stage' }}
+  TERRAFORM_DIR: ./terraform
 
 jobs:
   build-and-deploy:
@@ -34,6 +35,31 @@ jobs:
         project_id: ${{ env.GCP_PROJECT }}
         export_default_credentials: true
         install_components: gke-gcloud-auth-plugin
+
+    - name: Terraform Init
+      id: init
+      run: |
+        terraform init \
+          -backend-config="bucket=tf-state-261909652337-bucket" \
+          -backend-config="prefix=terraform/state/${{ env.APP_ENV }}"
+      working-directory: ${{ env.TERRAFORM_DIR }}
+
+    - name: Terraform Validate
+      id: validate
+      run: terraform validate -no-color
+      working-directory: ${{ env.TERRAFORM_DIR }}
+
+    - name: Terraform Plan
+      id: plan
+      run: |
+        terraform plan \
+          -out=tfplan -no-color
+      working-directory: ${{ env.TERRAFORM_DIR }}
+
+    - name: Terraform Apply
+      id: apply
+      run: terraform apply -auto-approve tfplan
+      working-directory: ${{ env.TERRAFORM_DIR }}
 
     - name: Configure Docker
       run: gcloud auth configure-docker us-docker.pkg.dev --quiet

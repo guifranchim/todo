@@ -14,7 +14,6 @@ env:
   BACKEND_IMAGE_NAME: todolist-ua-back 
   FRONTEND_IMAGE_NAME: todolist-ua-front 
   IMAGE_TAG: ${{ github.sha }}
-  
   APP_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'stage' }}
   TERRAFORM_DIR: ./terraform
   ANSIBLE_DIR: ./ansible
