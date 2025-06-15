@@ -79,3 +79,15 @@ variable "network_name" {
     type        = string
     default     = "default"
 }
+variable "enable_monitoring" {
+  description = "Flag para habilitar configuração de monitoramento"
+  type        = bool
+  default     = true
+}
+
+variable "grafana_admin_password" {
+  description = "Senha do admin do Grafana"
+  type        = string
+  sensitive   = true
+  default     = "admin"
+}

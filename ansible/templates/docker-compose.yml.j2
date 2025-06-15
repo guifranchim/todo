@@ -50,9 +50,37 @@ services:
       - backend 
     networks:
       - app-network
+  prometheus:
+    image: prom/prometheus
+    container_name: "prometheus-{{ app_env }}"
+    ports:
+      - "9091:9090"
+    volumes:
+      - /opt/app/prometheus/:/etc/prometheus/
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  grafana:
+    image: grafana/grafana
+    container_name: "grafana-{{ app_env }}"
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana-storage:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    networks:
+      - app-network
 
 volumes:
   mysql_data: 
+  grafana-storage: 
 
 networks:
   app-network:

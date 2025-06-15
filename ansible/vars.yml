@@ -1,0 +1,13 @@
+grafana_admin_password: admin
+app_env: stage
+app_dir: /opt/app
+ssh_user_on_vm: ubuntu
+
+gcp_project_id: exalted-legacy-459419-m8
+backend_artifact_repo: todolist-backend-repo
+frontend_artifact_repo: todolist-frontend-repo
+
+backend_image_name: todolist-ua-back
+frontend_image_name: todolist-ua-front
+image_tag: latest
+

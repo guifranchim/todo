@@ -105,6 +105,34 @@
         state: present
         remove_orphans: yes
 
+    - name: Criar diretório para monitoramento
+      ansible.builtin.file:
+        path: "/opt/monitoring"
+        state: directory
+        mode: '0755'
+
+    - name: Remover diretório errado caso exista
+      ansible.builtin.file:
+        path: /opt/monitoring/prometheus.yml
+        state: absent
+
+    - name: Renderizar template do Prometheus
+      ansible.builtin.template:
+        src: prometheus.yml.j2
+        dest: /opt/monitoring/prometheus.yml
+        mode: '0644'
+
+    - name: Copiar docker-compose para monitoramento
+      ansible.builtin.template:
+        src: "templates/monitoring-compose.yml.j2"
+        dest: "/opt/monitoring/docker-compose.yml"
+        mode: '0644'
+
+    - name: Iniciar containers de monitoramento
+      community.docker.docker_compose_v2:
+        project_src: "/opt/monitoring"
+        state: present
+
   handlers:
     - name: Iniciar Docker
       ansible.builtin.service:

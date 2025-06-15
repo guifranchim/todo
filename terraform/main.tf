@@ -77,6 +77,29 @@ resource "google_compute_firewall" "allow_backend_app" {
   source_ranges = ["0.0.0.0/0"]
   target_tags   = ["http-server"]
 }
+resource "google_compute_firewall" "allow_grafana" {
+  project = var.gcp_project_id
+  name    = "allow-grafana-${var.environment}"
+  network = var.network_name
+  allow {
+    protocol = "tcp"
+    ports    = ["3000"]
+  }
+  source_ranges = ["0.0.0.0/0"]
+  target_tags   = ["http-server"]
+}
+
+resource "google_compute_firewall" "allow_prometheus" {
+  project = var.gcp_project_id
+  name    = "allow-prometheus-${var.environment}"
+  network = var.network_name
+  allow {
+    protocol = "tcp"
+    ports    = ["9090"]
+  }
+  source_ranges = ["0.0.0.0/0"]
+  target_tags   = ["http-server"]
+}
 
 terraform {
   backend "gcs" {
