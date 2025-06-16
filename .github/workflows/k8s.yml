@@ -7,7 +7,7 @@ on:
 env:
   GCP_PROJECT: exalted-legacy-459419-m8
   GKE_CLUSTER: todo-ua
-  GKE_REGION: southamerica-east1-a
+  GKE_REGION: southamerica-east1
   BACK_REPO: todolist-backend-repo
   FRONT_REPO: todolist-frontend-repo
   IMAGE_REPO_BACK: todolist-ua-back
@@ -90,7 +90,7 @@ jobs:
     - name: Get GKE credentials
       run: |
         gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} \
-          --zone ${{ env.env.GKE_REGION }} \
+          --region ${{ env.env.GKE_REGION }} \
           --project ${{ env.GCP_PROJECT }}
 
     - name: Deploy all resources
