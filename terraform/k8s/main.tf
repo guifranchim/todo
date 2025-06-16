@@ -56,7 +56,7 @@ resource "google_storage_bucket" "tf_state" {
   project      = var.gcp_project_id
   name         = var.tf_state_bucket_name
   location     = var.gcp_region
-  force_destroy = false 
+  force_destroy = true 
 
   
   versioning {
@@ -71,9 +71,8 @@ resource "google_container_cluster" "primary" {
   location = var.gcp_region
   network  = var.network_name
   remove_default_node_pool = true
-  initial_node_count       = 0
   deletion_protection      = false
-  
+
     node_config {
     machine_type = var.machine_type
     disk_size_gb = 30
