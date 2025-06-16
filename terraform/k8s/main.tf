@@ -1,3 +1,4 @@
+
 variable "gcp_project_id" {
   description = "O ID do seu projeto GCP."
   type        = string
@@ -11,7 +12,7 @@ variable "gcp_region" {
 }
 
 variable "tf_state_bucket_name" {
-  description = "O nome do bucket GCS para armazenar o estado do Terraform. Deve ser globalmente único."
+  description = "O nome do bucket GCS para armazenar o estado do Terraform."
   type        = string
   default     = "tf-state-261909652338-bucket"
 }
@@ -25,7 +26,7 @@ variable "cluster_name" {
 variable "network_name" {
   description = "O nome da rede VPC a ser usada pelo cluster."
   type        = string
-  default     = "default" 
+  default     = "default"
 }
 
 variable "node_pool_name" {
@@ -37,13 +38,20 @@ variable "node_pool_name" {
 variable "node_count" {
   description = "O número inicial de nós no node pool."
   type        = number
-  default     = 2 
+  default     = 2
 }
 
 variable "machine_type" {
   description = "O tipo de máquina para os nós do GKE."
   type        = string
-  default     = "e2-medium" 
+  default     = "e2-medium"
+}
+
+terraform {
+  backend "gcs" {
+    bucket = "tf-state-261909652338-bucket"
+    prefix = "gke/todo-ua"
+  }
 }
 
 provider "google" {
@@ -51,30 +59,27 @@ provider "google" {
   region  = var.gcp_region
 }
 
-
 resource "google_storage_bucket" "tf_state" {
-  project      = var.gcp_project_id
-  name         = var.tf_state_bucket_name
-  location     = var.gcp_region
-  force_destroy = true 
+  name          = var.tf_state_bucket_name
+  project       = var.gcp_project_id
+  location      = var.gcp_region
+  force_destroy = true
 
-  
   versioning {
     enabled = true
   }
 }
 
-
 resource "google_container_cluster" "primary" {
-  project  = var.gcp_project_id
-  name     = var.cluster_name
-  location = var.gcp_region
-  network  = var.network_name
+  project                 = var.gcp_project_id
+  name                    = var.cluster_name
+  location                = var.gcp_region
+  network                 = var.network_name
   remove_default_node_pool = true
   initial_node_count       = 1
   deletion_protection      = false
 
-    node_config {
+  node_config {
     machine_type = var.machine_type
     disk_size_gb = 30
     oauth_scopes = ["https://www.googleapis.com/auth/cloud-platform"]
@@ -83,11 +88,17 @@ resource "google_container_cluster" "primary" {
     }
   }
 
+   private_cluster_config {
+    enable_private_nodes       = true
+    master_global_access_config {
+      enabled = true
+    }
+  }
+
   depends_on = [
     google_storage_bucket.tf_state,
   ]
 }
-
 
 resource "google_container_node_pool" "primary_nodes" {
   project    = var.gcp_project_id
@@ -99,10 +110,7 @@ resource "google_container_node_pool" "primary_nodes" {
   node_config {
     machine_type = var.machine_type
     disk_size_gb = 30
-    oauth_scopes = [
-      "https://www.googleapis.com/auth/cloud-platform"
-    ]
-    
+    oauth_scopes = ["https://www.googleapis.com/auth/cloud-platform"]
     metadata = {
       disable-legacy-endpoints = "true"
     }
@@ -113,15 +121,7 @@ resource "google_container_node_pool" "primary_nodes" {
     auto_upgrade = true
   }
 
-  
   depends_on = [
     google_container_cluster.primary,
   ]
-}
-
-terraform {
-  backend "gcs" {
-    bucket = "tf-state-261909652338-bucket"
-    prefix = "gke/todo-ua" 
-  }
 }
