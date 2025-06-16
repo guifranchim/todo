@@ -71,7 +71,7 @@ resource "google_container_cluster" "primary" {
   location = var.gcp_region
   network  = var.network_name
   remove_default_node_pool = true
-  initial_node_count       = 1
+  initial_node_count       = 0
 
     node_config {
     machine_type = var.machine_type
