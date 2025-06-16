@@ -14,7 +14,7 @@ env:
   IMAGE_REPO_FRONT: todolist-ua-front
   TAG: ${{ github.sha }}
   ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'stage' }}
-  TERRAFORM_DIR: ./terraform
+  TERRAFORM_DIR: ./terraform/k8s/
 
 jobs:
   build-and-deploy:
