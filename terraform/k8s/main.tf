@@ -13,7 +13,7 @@ variable "gcp_region" {
 variable "tf_state_bucket_name" {
   description = "O nome do bucket GCS para armazenar o estado do Terraform. Deve ser globalmente único."
   type        = string
-  default     = "tf-state-261909652337-bucket"
+  default     = "tf-state-261909652338-bucket"
 }
 
 variable "cluster_name" {
@@ -111,7 +111,7 @@ resource "google_container_node_pool" "primary_nodes" {
 
 terraform {
   backend "gcs" {
-    bucket = "tf-state-261909652337-bucket"
+    bucket = "tf-state-261909652338-bucket"
     prefix = "gke/todo-ua" 
   }
 }
