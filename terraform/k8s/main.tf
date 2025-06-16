@@ -72,7 +72,8 @@ resource "google_container_cluster" "primary" {
   network  = var.network_name
   remove_default_node_pool = true
   initial_node_count       = 0
-
+  deletion_protection      = false
+  
     node_config {
     machine_type = var.machine_type
     disk_size_gb = 30
