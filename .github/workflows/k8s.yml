@@ -84,8 +84,8 @@ jobs:
         file: ./Dockerfile
         push: true
         tags: |
-          us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}-K8S:${{ env.TAG }}
-          us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}-K8S:latest
+          us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}-k8s:${{ env.TAG }}
+          us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}-k8s:latest
         build-args: |
           BACKEND_HOST=backend-service
 
@@ -102,10 +102,10 @@ jobs:
     - name: Update images & wait rollout
       run: |
         kubectl set image deployment/backend \
-          backend=us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.BACK_REPO }}/${{ env.IMAGE_REPO_BACK }}-K8S:${{ env.TAG }} \
+          backend=us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.BACK_REPO }}/${{ env.IMAGE_REPO_BACK }}:${{ env.TAG }} \
           -n ${{ env.ENV }}
         kubectl set image deployment/frontend \
-          frontend=us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}-K8S:${{ env.TAG }} \
+          frontend=us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}-k8s:${{ env.TAG }} \
           -n ${{ env.ENV }}
         kubectl rollout status deployment/backend  -n ${{ env.ENV }}
         kubectl rollout status deployment/frontend -n ${{ env.ENV }}
