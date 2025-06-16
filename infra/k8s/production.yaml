@@ -158,7 +158,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: us-docker.pkg.dev/${GCP_PROJECT}/${FRONT_REPO}/${IMAGE_REPO_FRONT}:latest
+        image: us-docker.pkg.dev/${GCP_PROJECT}/${FRONT_REPO}/${IMAGE_REPO_FRONT}-k8s:latest
         ports:
         - containerPort: 80
 ---
