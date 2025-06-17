@@ -6,13 +6,13 @@ variable "gcp_project_id" {
 variable "gcp_region" {
     description = "A região GCP para os recursos."
     type        = string
-    default     = "us-central1" 
+    default     = "southamerica-east1" 
 }
 
 variable "gcp_zone" {
     description = "A zona GCP para a instância da VM."
     type        = string
-    default     = "us-central1-a"
+    default     = "southamerica-east1-a"
 }
 
 variable "instance_name_prefix" {
