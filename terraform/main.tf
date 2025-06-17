@@ -9,11 +9,6 @@ variable "state_environments" {
   default     = ["stage", "production"]
 }
 
-variable "environment" {
-  description = "Nome do ambiente (stage ou production)."
-  type        = string
-}
-
 resource "google_storage_bucket" "tf_state" {
   for_each = toset(var.state_environments)
 
