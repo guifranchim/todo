@@ -108,7 +108,7 @@ jobs:
     - name: Prepare and Deploy Manifests
       run: |
         ENV_NAME=${{ steps.get_env.outputs.ENV_NAME }}
-        MANIFEST_DIR="infra/k8s/$ENV_NAME"
+        MANIFEST_DIR="infra/$ENV_NAME"
         
         BACK_IMAGE_URL="southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-backend-repo-$ENV_NAME/${{ env.IMAGE_REPO_BACK }}:${{ github.sha }}"
         FRONT_IMAGE_URL="southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-frontend-repo-$ENV_NAME/${{ env.IMAGE_REPO_FRONT }}:${{ github.sha }}"
