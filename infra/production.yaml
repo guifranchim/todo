@@ -171,44 +171,52 @@ metadata:
   name: frontend-service
   namespace: production
 spec:
-  type: NodePort
+  type: ClusterIP 
   selector:
     app: frontend
   ports:
   - port: 80
     targetPort: 80
-    nodePort: 30081
 ---
 apiVersion: networking.gke.io/v1
 kind: ManagedCertificate
 metadata:
-  name: prod-cert
+  name: prod-k8s-cert 
   namespace: production
 spec:
   domains:
-    - prod.franch.in
+    - prod.k8s.franch.in
+
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: frontend-ingress
+  name: main-ingress
   namespace: production
   annotations:
-    kubernetes.io/ingress.global-static-ip-name: ingress-ip-franchin
-    networking.gke.io/managed-certificates: prod-cert
+    kubernetes.io/ingress.global-static-ip-name: ingress-ip-franchin 
+    networking.gke.io/managed-certificates: prod-k8s-cert 
     kubernetes.io/ingress.class: "gce"
 spec:
   rules:
-    - host: prod.franch.in
+    - host: prod.k8s.franch.in
       http:
         paths:
-          - path: /
-            pathType: Prefix
+          - path: /todo
+            pathType: Prefix 
             backend:
               service:
                 name: frontend-service
                 port:
                   number: 80
+          - path: /grafana
+            pathType: Prefix
+            backend:
+              service:
+                name: prometheus-grafana
+                port:
+                  number: 80
+
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
