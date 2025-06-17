@@ -1,7 +1,7 @@
 import axios, { AxiosRequestConfig } from "axios";
 
 export const api = axios.create({
-  baseURL: "/todo/api",
+  baseURL: "/api",
 });
 
 export const apiRequest = async <T>(config: AxiosRequestConfig): Promise<T> => {
