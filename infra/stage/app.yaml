@@ -215,6 +215,16 @@ spec:
                 port:
                   number: 80
 ---
+apiVersion: net.gke.io/v1
+kind: ServiceImport
+metadata:
+  name: grafana-ingress-service 
+  namespace: stage 
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+---
 
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

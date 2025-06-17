@@ -54,3 +54,10 @@ spec:
           
           matchLabels:
             kubernetes.io/metadata.name: stage
+---
+apiVersion: net.gke.io/v1
+kind: ServiceExport
+metadata:
+  name: grafana-ingress-service 
+  namespace: monitoring
+---
