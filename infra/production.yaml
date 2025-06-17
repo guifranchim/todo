@@ -106,7 +106,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: us-docker.pkg.dev/${GCP_PROJECT}/${BACK_REPO}/${IMAGE_REPO_BACK}:latest
+        image: IMAGE_BACKEND_PLACEHOLDER
         ports:
         - containerPort: 3000
         env:
@@ -158,7 +158,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: us-docker.pkg.dev/${GCP_PROJECT}/${FRONT_REPO}/${IMAGE_REPO_FRONT}:latest
+        image: IMAGE_FRONTEND_PLACEHOLDER
         ports:
         - containerPort: 80
         env:

@@ -69,11 +69,11 @@ jobs:
         gcloud container clusters get-credentials ${{ env.GKE_CLUSTER_BASE_NAME }}-${{ steps.get_env.outputs.ENV_NAME }} \
           --zone ${{ env.GCP_ZONE }} --project ${{ secrets.GCP_PROJECT_ID }}
 
-    - name: Install Helm and Deploy Monitoring
+    - name: Install/Upgrade Monitoring Stack
       run: |
         curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
         chmod 700 get_helm.sh
-        ./get_helm.sh
+        ./get_helm.sh > /dev/null 2>&1
         helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
         helm repo update
         helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
@@ -102,28 +102,19 @@ jobs:
     - name: Prepare Manifest File
       run: |
         ENV_NAME=${{ steps.get_env.outputs.ENV_NAME }}
-        
-        BACK_REPO_URL="southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-backend-repo-$ENV_NAME/${{ env.IMAGE_REPO_BACK }}"
-        FRONT_REPO_URL="southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-frontend-repo-$ENV_NAME/${{ env.IMAGE_REPO_FRONT }}"
-        
+        BACK_IMAGE_URL="southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-backend-repo-$ENV_NAME/${{ env.IMAGE_REPO_BACK }}:${{ github.sha }}"
+        FRONT_IMAGE_URL="southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-frontend-repo-$ENV_NAME/${{ env.IMAGE_REPO_FRONT }}:${{ github.sha }}"
+        echo "Backend image will be: $BACK_IMAGE_URL"
+        echo "Frontend image will be: $FRONT_IMAGE_URL"
         cp infra/$ENV_NAME.yaml manifest.temp.yaml
-
-        sed -i "s|__BACKEND_IMAGE_URL__|${BACK_REPO_URL}|g" manifest.temp.yaml
-        sed -i "s|__FRONTEND_IMAGE_URL__|${FRONT_REPO_URL}|g" manifest.temp.yaml
-        
-        echo "Prepared manifest.temp.yaml for $ENV_NAME"
+        sed -i "s|IMAGE_BACKEND_PLACEHOLDER|$BACK_IMAGE_URL|g" manifest.temp.yaml
+        sed -i "s|IMAGE_FRONTEND_PLACEHOLDER|$FRONT_IMAGE_URL|g" manifest.temp.yaml
+        echo "--- Prepared manifest.temp.yaml for $ENV_NAME ---"
         cat manifest.temp.yaml
 
     - name: Deploy all resources from Manifest
       run: kubectl apply -f manifest.temp.yaml
 
-    - name: Update deployment images to new tag
-      run: |
-        ENV_NAME=${{ steps.get_env.outputs.ENV_NAME }}
-        BACK_IMAGE="southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-backend-repo-$ENV_NAME/${{ env.IMAGE_REPO_BACK }}:${{ github.sha }}"
-        FRONT_IMAGE="southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-frontend-repo-$ENV_NAME/${{ env.IMAGE_REPO_FRONT }}:${{ github.sha }}"
-        kubectl set image deployment/backend backend=$BACK_IMAGE -n $ENV_NAME
-        kubectl set image deployment/frontend frontend=$FRONT_IMAGE -n $ENV_NAME
 
     - name: Verify deployments
       run: |
