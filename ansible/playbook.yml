@@ -83,7 +83,7 @@
         state: present
 
     - name: Autenticar Docker com o Google Artifact Registry (via gcloud na VM)
-      ansible.builtin.command: gcloud auth configure-docker us-docker.pkg.dev --quiet
+      ansible.builtin.command: gcloud auth configure-docker {{ gcp_region }}-docker.pkg.dev --quiet
       changed_when: false
       environment:
         PATH: "{{ ansible_env.PATH }}:/usr/local/bin:/snap/bin" 
