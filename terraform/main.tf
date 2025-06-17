@@ -3,6 +3,34 @@ provider "google" {
   region  = var.gcp_region
 }
 
+variable "state_environments" {
+  description = "Ambientes em que teremos buckets de Terraform state."
+  type        = list(string)
+  default     = ["stage", "production"]
+}
+
+variable "environment" {
+  description = "Nome do ambiente (stage ou production)."
+  type        = string
+}
+
+resource "google_storage_bucket" "tf_state" {
+  for_each = toset(var.state_environments)
+
+  name                        = "tf-state-261909652338-${each.value}"
+  project                     = var.gcp_project_id
+  location                    = var.gcp_region
+  force_destroy               = true
+  uniform_bucket_level_access = true
+
+  versioning { enabled = true }
+
+  lifecycle_rule {
+    action { type = "Delete" }
+    condition { age = 90 }
+  }
+}
+
 resource "google_compute_instance" "vm_instance" {
   project      = var.gcp_project_id
   zone         = var.gcp_zone
@@ -97,6 +125,6 @@ resource "google_compute_firewall" "allow_prometheus" {
 
 terraform {
   backend "gcs" {
-    bucket = "tf-state-261909652337-bucket"
+    backend "gcs" {}
   }
 }
