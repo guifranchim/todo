@@ -1,18 +1,13 @@
-FROM node:18-alpine as builder
+FROM node:20-alpine AS build
 WORKDIR /app
-COPY package*.json ./
-RUN npm install --legacy-peer-deps
+COPY package.json yarn.lock ./
+RUN yarn install
 COPY . .
-RUN npm run build
+RUN yarn build
 
-
-FROM nginx:1.23-alpine
-COPY --from=builder /app/build /usr/share/nginx/html
-
+FROM nginx:alpine
+COPY --from=build /app/dist /usr/share/nginx/html
 RUN rm /etc/nginx/conf.d/default.conf
-
 COPY default.conf.template /etc/nginx/templates/default.conf.template
-
 EXPOSE 80
-
 CMD ["nginx", "-g", "daemon off;"]
