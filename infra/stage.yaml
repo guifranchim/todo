@@ -152,6 +152,7 @@ metadata:
   name: frontend-service
   namespace: stage
   annotations:
+    
     cloud.google.com/backend-config: '{"default": "frontend-health-check-config"}'
 spec:
   type: ClusterIP 
@@ -161,22 +162,37 @@ spec:
   - port: 80
     targetPort: 80
 ---
+
+
+
+
+
 apiVersion: v1
 kind: Service
 metadata:
-  name: prometheus-grafana 
+  name: grafana-proxy
   namespace: stage
-  annotations:
-    cloud.google.com/backend-config: '{"default": "grafana-health-check-config"}'
 spec:
-  type: ExternalName
-  externalName: prometheus-grafana.monitoring.svc.cluster.local
+  type: ClusterIP
   ports:
-  - name: http
-    port: 80
-    protocol: TCP
-    targetPort: 80
+    - port: 80
+      targetPort: 3000 
 ---
+
+
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: grafana-proxy 
+  namespace: stage
+subsets:
+  - addresses:
+      - ip: "34.118.239.20" 
+    ports:
+      - port: 3000 
+---
+
+
 apiVersion: cloud.google.com/v1
 kind: BackendConfig
 metadata:
@@ -188,17 +204,7 @@ spec:
     port: 80
     type: HTTP
 ---
-apiVersion: cloud.google.com/v1
-kind: BackendConfig
-metadata:
-  name: grafana-health-check-config
-  namespace: stage
-spec:
-  healthCheck:
-    requestPath: /api/health 
-    port: 80
-    type: HTTP
----
+
 apiVersion: networking.gke.io/v1
 kind: ManagedCertificate
 metadata:
@@ -208,6 +214,7 @@ spec:
   domains:
     - dev.k8s.franch.in
 ---
+
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -226,7 +233,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: prometheus-grafana 
+                name: grafana-proxy 
                 port:
                   number: 80
           - path: /*
@@ -237,11 +244,15 @@ spec:
                 port:
                   number: 80
 ---
+
+
+
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-backend-to-mysql
   namespace: stage
+
 spec:
   podSelector:
     matchLabels:
@@ -262,6 +273,7 @@ kind: NetworkPolicy
 metadata:
   name: allow-frontend-to-backend
   namespace: stage
+
 spec:
   podSelector:
     matchLabels:
@@ -282,6 +294,7 @@ kind: NetworkPolicy
 metadata:
   name: allow-all-to-frontend
   namespace: stage
+
 spec:
   podSelector:
     matchLabels:
@@ -296,25 +309,3 @@ spec:
           cidr: 35.191.0.0/16
   - from:
       - namespaceSelector: {}
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-ingress-and-health-checks-to-grafana
-  namespace: monitoring
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: grafana 
-  policyTypes:
-    - Ingress
-  ingress:
-    - from:
-      - ipBlock:
-          cidr: 130.211.0.0/22
-      - ipBlock:
-          cidr: 35.191.0.0/16
-    - from:
-      - namespaceSelector:
-          matchLabels:
-            kubernetes.io/metadata.name: stage
