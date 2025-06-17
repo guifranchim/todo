@@ -1,25 +1,18 @@
-FROM node:20-alpine AS build
+FROM node:18-alpine as builder
 WORKDIR /app
-COPY package.json yarn.lock ./
-RUN yarn install
+COPY package*.json ./
+RUN npm install
 COPY . .
-RUN yarn build
+RUN npm run build
 
-FROM nginx:alpine
 
-ARG BACKEND_HOST
-ENV BACKEND_HOST=${BACKEND_HOST}
+FROM nginx:1.23-alpine
+COPY --from=builder /app/build /usr/share/nginx/html
 
-RUN apk add --no-cache gettext
+RUN rm /etc/nginx/conf.d/default.conf
 
-COPY ./nginx.conf /etc/nginx/conf.d/default.conf.template
-
-RUN envsubst '$$BACKEND_HOST' \
-    < /etc/nginx/conf.d/default.conf.template \
-    > /etc/nginx/conf.d/default.conf \
-    && rm /etc/nginx/conf.d/default.conf.template
-
-COPY --from=build /app/dist /usr/share/nginx/html
+COPY default.conf.template /etc/nginx/templates/default.conf.template
 
 EXPOSE 80
+
 CMD ["nginx", "-g", "daemon off;"]
