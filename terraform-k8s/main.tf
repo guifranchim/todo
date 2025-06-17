@@ -14,6 +14,10 @@ resource "google_container_cluster" "primary" {
   remove_default_node_pool = true
   initial_node_count     = 1
   deletion_protection    = false 
+
+  node_config {
+    disk_size_gb = 20
+  }
 }
 
 resource "google_container_node_pool" "primary_nodes" {
