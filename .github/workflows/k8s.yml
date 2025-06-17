@@ -1,11 +1,11 @@
-name: Build, Provision, and Deploy to GKE (YAML Method)
+name: Build, Provision, and Deploy to GKE
 
 on:
   push:
     branches: [ main, development ]
 
 env:
-  GCP_REGION: southamerica-east1
+  GCP_ZONE: southamerica-east1-b
   TERRAFORM_DIR: ./terraform-k8s/
   GKE_CLUSTER_BASE_NAME: todo-ua 
   IMAGE_REPO_BACK: todolist-ua-back
@@ -13,7 +13,6 @@ env:
 
 jobs:
   deploy:
-    
     environment: 
       name: ${{ github.ref == 'refs/heads/main' && 'production' || 'stage' }}
     runs-on: ubuntu-latest
@@ -53,17 +52,22 @@ jobs:
           -backend-config="prefix=terraform/state/$ENV_NAME"
       working-directory: ${{ env.TERRAFORM_DIR }}
 
-    - name: Terraform Apply
+    - name: Terraform Plan
       run: |
-        terraform apply -auto-approve -no-color \
+        terraform plan -no-color -out=tfplan \
           -var="gcp_project_id=${{ secrets.GCP_PROJECT_ID }}" \
+          -var="gcp_zone=${{ env.GCP_ZONE }}" \
           -var="environment=${{ steps.get_env.outputs.ENV_NAME }}"
+      working-directory: ${{ env.TERRAFORM_DIR }}
+
+    - name: Terraform Apply
+      run: terraform apply -auto-approve -no-color tfplan
       working-directory: ${{ env.TERRAFORM_DIR }}
     
     - name: Get GKE credentials
       run: |
         gcloud container clusters get-credentials ${{ env.GKE_CLUSTER_BASE_NAME }}-${{ steps.get_env.outputs.ENV_NAME }} \
-          --region ${{ env.GCP_REGION }} --project ${{ secrets.GCP_PROJECT_ID }}
+          --zone ${{ env.GCP_ZONE }} --project ${{ secrets.GCP_PROJECT_ID }}
 
     - name: Install Helm and Deploy Monitoring
       run: |
@@ -78,35 +82,33 @@ jobs:
           --wait
     
     - name: Configure Docker
-      run: gcloud auth configure-docker us-docker.pkg.dev --quiet
+      run: gcloud auth configure-docker southamerica-east1-docker.pkg.dev --quiet 
 
     - name: Build & Push Backend
       uses: docker/build-push-action@v4
       with:
         context: ./backend
         push: true
-        tags: us-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-backend-repo-${{ steps.get_env.outputs.ENV_NAME }}/${{ env.IMAGE_REPO_BACK }}:${{ github.sha }}
+        tags: southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-backend-repo-${{ steps.get_env.outputs.ENV_NAME }}/${{ env.IMAGE_REPO_BACK }}:${{ github.sha }}
 
     - name: Build & Push Frontend
       uses: docker/build-push-action@v4
       with:
         context: ./frontend
         push: true
-        tags: us-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-frontend-repo-${{ steps.get_env.outputs.ENV_NAME }}/${{ env.IMAGE_REPO_FRONT }}:${{ github.sha }}
+        tags: southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-frontend-repo-${{ steps.get_env.outputs.ENV_NAME }}/${{ env.IMAGE_REPO_FRONT }}:${{ github.sha }}
 
     - name: Prepare Manifest File
-      id: prepare_manifest
       run: |
         ENV_NAME=${{ steps.get_env.outputs.ENV_NAME }}
-        BACK_REPO_VAR="todolist-backend-repo-$ENV_NAME"
-        FRONT_REPO_VAR="todolist-frontend-repo-$ENV_NAME"
+        
+        BACK_REPO_URL="southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-backend-repo-$ENV_NAME/${{ env.IMAGE_REPO_BACK }}"
+        FRONT_REPO_URL="southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-frontend-repo-$ENV_NAME/${{ env.IMAGE_REPO_FRONT }}"
+        
         cp infra/$ENV_NAME.yaml manifest.temp.yaml
-
-        sed -i "s|__GCP_PROJECT__|${{ secrets.GCP_PROJECT_ID }}|g" manifest.temp.yaml
-        sed -i "s|__BACK_REPO__|$BACK_REPO_VAR|g" manifest.temp.yaml
-        sed -i "s|__FRONT_REPO__|$FRONT_REPO_VAR|g" manifest.temp.yaml
-        sed -i "s|__IMAGE_REPO_BACK__|${{ env.IMAGE_REPO_BACK }}|g" manifest.temp.yaml
-        sed -i "s|__IMAGE_REPO_FRONT__|${{ env.IMAGE_REPO_FRONT }}|g" manifest.temp.yaml
+        
+        sed -i "s|__BACKEND_IMAGE_URL__|${BACK_REPO_URL}|g" manifest.temp.yaml
+        sed -i "s|__FRONTEND_IMAGE_URL__|${FRONT_REPO_URL}|g" manifest.temp.yaml
         
         echo "Prepared manifest.temp.yaml for $ENV_NAME"
         cat manifest.temp.yaml
@@ -117,13 +119,11 @@ jobs:
     - name: Update deployment images to new tag
       run: |
         ENV_NAME=${{ steps.get_env.outputs.ENV_NAME }}
-        BACK_IMAGE="us-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-backend-repo-$ENV_NAME/${{ env.IMAGE_REPO_BACK }}:${{ github.sha }}"
-        FRONT_IMAGE="us-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-frontend-repo-$ENV_NAME/${{ env.IMAGE_REPO_FRONT }}:${{ github.sha }}"
-
+        BACK_IMAGE="southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-backend-repo-$ENV_NAME/${{ env.IMAGE_REPO_BACK }}:${{ github.sha }}"
+        FRONT_IMAGE="southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-frontend-repo-$ENV_NAME/${{ env.IMAGE_REPO_FRONT }}:${{ github.sha }}"
         kubectl set image deployment/backend backend=$BACK_IMAGE -n $ENV_NAME
         kubectl set image deployment/frontend frontend=$FRONT_IMAGE -n $ENV_NAME
 
-    
     - name: Verify deployments
       run: |
         ENV_NAME=${{ steps.get_env.outputs.ENV_NAME }}
