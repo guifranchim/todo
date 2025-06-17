@@ -71,39 +71,42 @@ jobs:
         gcloud container clusters get-credentials ${{ env.GKE_CLUSTER_BASE_NAME }}-${{ steps.get_env.outputs.ENV_NAME }} \
           --zone ${{ env.GCP_ZONE }} --project ${{ secrets.GCP_PROJECT_ID }}
 
-    - name: Enable GKE Features (Service Import/Export)
-      run: |
-        echo "Enabling GKE Hub API and Multi-cluster Services..."
-        gcloud services enable gkehub.googleapis.com --project=${{ secrets.GCP_PROJECT_ID }}
-        gcloud container fleet multi-cluster-services enable --project=${{ secrets.GCP_PROJECT_ID }}
-
-    - name: Wait for CRDs to be installed
-      run: |
-        echo "Waiting for ServiceImport/ServiceExport CRDs to become available..."
-        for i in {1..18}; do
-          if kubectl get crd serviceimports.net.gke.io > /dev/null 2>&1 && kubectl get crd serviceexports.net.gke.io > /dev/null 2>&1; then
-            echo "CRDs are installed!"
-            exit 0
-          fi
-          echo "Attempt $i: CRDs not found yet, waiting 10 seconds..."
-          sleep 10
-        done
-        echo "Error: Timed out waiting for CRDs to be installed."
-        exit 1
-
-    - name: Install/Upgrade Monitoring Stack (Prometheus + Loki)
+    - name: Setup Helm Repositories
       run: |
         curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
         chmod 700 get_helm.sh
         ./get_helm.sh > /dev/null 2>&1
         helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+        helm repo add grafana https://grafana.github.io/helm-charts
         helm repo update
+        
+    - name: Install/Upgrade Monitoring Stack (Prometheus & Grafana)
+      run: |
+        # Create a values file to add Loki as a datasource in Grafana
+        cat <<EOF > grafana-values.yaml
+        grafana:
+          service:
+            type: LoadBalancer
+          additionalDataSources:
+          - name: Loki
+            type: loki
+            url: http://loki-stack.monitoring.svc.cluster.local:3100
+            access: proxy
+            isDefault: false
+        EOF
+
         helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
           --namespace monitoring --create-namespace \
-          --set grafana.service.type=LoadBalancer \
-          --set loki.enabled=true \
-          --set promtail.enabled=true \
-          --set grafana.sidecar.datasources.enabled=true \
+          -f grafana-values.yaml \
+          --wait
+
+    - name: Install/Upgrade Logging Stack (Loki & Promtail)
+      run: |
+        helm upgrade --install loki-stack grafana/loki-stack \
+          --namespace monitoring \
+          --set grafana.enabled=false \
+          --set prometheus.enabled=false \
+          --set prometheus.alertmanager.enabled=false \
           --wait
     
     - name: Configure Docker
@@ -124,25 +127,17 @@ jobs:
         push: true
         tags: southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-frontend-repo-${{ steps.get_env.outputs.ENV_NAME }}/${{ env.IMAGE_REPO_FRONT }}:${{ github.sha }}
    
-    - name: Prepare and Deploy Manifests
+    - name: Prepare Manifest File
       run: |
         ENV_NAME=${{ steps.get_env.outputs.ENV_NAME }}
-        MANIFEST_DIR="infra/k8s/$ENV_NAME"
-        
         BACK_IMAGE_URL="southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-backend-repo-$ENV_NAME/${{ env.IMAGE_REPO_BACK }}:${{ github.sha }}"
         FRONT_IMAGE_URL="southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-frontend-repo-$ENV_NAME/${{ env.IMAGE_REPO_FRONT }}:${{ github.sha }}"
-        
-        echo "Processing manifests from: $MANIFEST_DIR"
-        
-        TEMP_DIR=$(mktemp -d)
-        
-        cp $MANIFEST_DIR/*.yaml $TEMP_DIR/
-        
-        sed -i "s|IMAGE_BACKEND_PLACEHOLDER|$BACK_IMAGE_URL|g" $TEMP_DIR/*.yaml
-        sed -i "s|IMAGE_FRONTEND_PLACEHOLDER|$FRONT_IMAGE_URL|g" $TEMP_DIR/*.yaml
-        
-        echo "--- Applying all manifests from temp directory ---"
-        kubectl apply -f $TEMP_DIR/
+        cp infra/$ENV_NAME.yaml manifest.temp.yaml
+        sed -i "s|IMAGE_BACKEND_PLACEHOLDER|$BACK_IMAGE_URL|g" manifest.temp.yaml
+        sed -i "s|IMAGE_FRONTEND_PLACEHOLDER|$FRONT_IMAGE_URL|g" manifest.temp.yaml
+
+    - name: Deploy all resources from Manifest
+      run: kubectl apply -f manifest.temp.yaml
 
     - name: Verify deployments
       run: |
