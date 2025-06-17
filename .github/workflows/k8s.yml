@@ -42,8 +42,9 @@ jobs:
     - name: Terraform Init
       id: init
       run: |
+        TF_BUCKET="tf-state-261909652338-${{ env.ENV }}"
         terraform init \
-          -backend-config="bucket=tf-state-261909652338-bucket" \
+          -backend-config="bucket=${TF_BUCKET}" \
           -backend-config="prefix=terraform/state/${{ env.ENV }}"
       working-directory: ${{ env.TERRAFORM_DIR }}
 

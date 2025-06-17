@@ -48,10 +48,7 @@ variable "machine_type" {
 }
 
 terraform {
-  backend "gcs" {
-    bucket = "tf-state-261909652338-bucket"
-    prefix = "gke/todo-ua"
-  }
+  backend "gcs" {}
 }
 
 provider "google" {
