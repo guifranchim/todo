@@ -1,5 +1,3 @@
-
-
 apiVersion: cloud.google.com/v1
 kind: BackendConfig
 metadata:
@@ -41,7 +39,7 @@ spec:
   policyTypes:
     - Ingress
   ingress:
-    - from: 
+    - from:
       - ipBlock:
           cidr: 130.211.0.0/22
       - ipBlock:
@@ -54,7 +52,7 @@ metadata:
   namespace: monitoring
 spec:
   domains:
-    - dev.k8s.franch.in
+    - grafana.dev.k8s.franch.in 
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -62,15 +60,15 @@ metadata:
   name: grafana-ingress 
   namespace: monitoring
   annotations:
-    kubernetes.io/ingress.global-static-ip-name: ingress-ip-stage 
+    kubernetes.io/ingress.global-static-ip-name: ingress-ip-stage-grafana 
     networking.gke.io/managed-certificates: grafana-k8s-cert 
     kubernetes.io/ingress.class: "gce"
 spec:
   rules:
-    - host: dev.k8s.franch.in
+    - host: grafana.dev.k8s.franch.in 
       http:
         paths:
-          - path: /grafana
+          - path: / 
             pathType: Prefix
             backend:
               service:
