@@ -94,10 +94,11 @@ jobs:
     - name: Build & Push Frontend
       uses: docker/build-push-action@v4
       with:
-        context: ./frontend
+        context: . 
+        file: ./Dockerfile 
         push: true
         tags: southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-frontend-repo-${{ steps.get_env.outputs.ENV_NAME }}/${{ env.IMAGE_REPO_FRONT }}:${{ github.sha }}
-
+   
     - name: Prepare Manifest File
       run: |
         ENV_NAME=${{ steps.get_env.outputs.ENV_NAME }}
@@ -106,7 +107,7 @@ jobs:
         FRONT_REPO_URL="southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-frontend-repo-$ENV_NAME/${{ env.IMAGE_REPO_FRONT }}"
         
         cp infra/$ENV_NAME.yaml manifest.temp.yaml
-        
+
         sed -i "s|__BACKEND_IMAGE_URL__|${BACK_REPO_URL}|g" manifest.temp.yaml
         sed -i "s|__FRONTEND_IMAGE_URL__|${FRONT_REPO_URL}|g" manifest.temp.yaml
         
