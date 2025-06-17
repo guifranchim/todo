@@ -46,6 +46,7 @@ services:
     restart: always
     environment:
       NODE_ENV: "{{ app_env | default('development') }}"
+      BACKEND_HOST: "backend"
     depends_on:
       - backend 
     networks:
