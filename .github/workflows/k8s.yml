@@ -45,12 +45,15 @@ jobs:
 
     - name: Terraform Init
       run: |
-        ENV_NAME=${{ steps.get_env.outputs.ENV_NAME }}
-        
-        TF_BUCKET="gke-tf-state-bucket-unique-name-12345" 
-        gcloud storage buckets describe gs://${TF_BUCKET} || gcloud storage buckets create gs://${TF_BUCKET} --project=${{ secrets.GCP_PROJECT_ID }} --location=southamerica-east1 --uniform-bucket-level-access
+        ENV_NAME=${{ steps.get_env.outputs.ENV_NAME  }}
+        TF_BUCKET="tf-state-${{ secrets.GCP_PROJECT_ID }}"
+        echo "Using Terraform state bucket: gs://${TF_BUCKET}"
+
+        gcloud storage buckets describe gs://${TF_BUCKET} >/dev/null 2>&1 || gcloud storage buckets create gs://${TF_BUCKET} --project=${{ secrets.GCP_PROJECT_ID }} --location=southamerica-east1 --uniform-bucket-level-access
+
+
         terraform init \
-          -backend-config="bucket=$TF_BUCKET" \
+          -backend-config="bucket=${TF_BUCKET}" \
           -backend-config="prefix=terraform/state/$ENV_NAME"
       working-directory: ${{ env.TERRAFORM_DIR }}
 
