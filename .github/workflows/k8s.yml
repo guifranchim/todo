@@ -74,36 +74,36 @@ jobs:
         gcloud container clusters get-credentials ${{ env.GKE_CLUSTER_BASE_NAME }}-${{ steps.get_env.outputs.ENV_NAME }} \
           --zone ${{ env.GCP_ZONE }} --project ${{ secrets.GCP_PROJECT_ID }}
 
-    - name: Install/Upgrade Monitoring Stack
-      run: |
-        curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
-        chmod 700 get_helm.sh
-        ./get_helm.sh > /dev/null 2>&1
-        helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-        helm repo update
-        helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
-          --namespace monitoring --create-namespace \
-          --set grafana.service.type=LoadBalancer \
-          --wait
+    # - name: Install/Upgrade Monitoring Stack
+    #   run: |
+    #     curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+    #     chmod 700 get_helm.sh
+    #     ./get_helm.sh > /dev/null 2>&1
+    #     helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+    #     helm repo update
+    #     helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
+    #       --namespace monitoring --create-namespace \
+    #       --set grafana.service.type=LoadBalancer \
+    #       --wait
     
     
-    - name: Configure Docker
-      run: gcloud auth configure-docker southamerica-east1-docker.pkg.dev --quiet 
+    # - name: Configure Docker
+    #   run: gcloud auth configure-docker southamerica-east1-docker.pkg.dev --quiet 
 
-    - name: Build & Push Backend
-      uses: docker/build-push-action@v4
-      with:
-        context: ./backend
-        push: true
-        tags: southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-backend-repo-${{ steps.get_env.outputs.ENV_NAME }}/${{ env.IMAGE_REPO_BACK }}:${{ github.sha }}
+    # - name: Build & Push Backend
+    #   uses: docker/build-push-action@v4
+    #   with:
+    #     context: ./backend
+    #     push: true
+    #     tags: southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-backend-repo-${{ steps.get_env.outputs.ENV_NAME }}/${{ env.IMAGE_REPO_BACK }}:${{ github.sha }}
 
-    - name: Build & Push Frontend
-      uses: docker/build-push-action@v4
-      with:
-        context: . 
-        file: ./Dockerfile 
-        push: true
-        tags: southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-frontend-repo-${{ steps.get_env.outputs.ENV_NAME }}/${{ env.IMAGE_REPO_FRONT }}:${{ github.sha }}
+    # - name: Build & Push Frontend
+    #   uses: docker/build-push-action@v4
+    #   with:
+    #     context: . 
+    #     file: ./Dockerfile 
+    #     push: true
+    #     tags: southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-frontend-repo-${{ steps.get_env.outputs.ENV_NAME }}/${{ env.IMAGE_REPO_FRONT }}:${{ github.sha }}
    
     - name: Prepare Manifest File
       run: |

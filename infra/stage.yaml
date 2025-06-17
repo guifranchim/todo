@@ -161,7 +161,22 @@ spec:
   - port: 80
     targetPort: 80
 ---
-
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-grafana 
+  namespace: stage
+  annotations:
+    cloud.google.com/backend-config: '{"default": "grafana-health-check-config"}'
+spec:
+  type: ExternalName
+  externalName: prometheus-grafana.monitoring.svc.cluster.local
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 80
+---
 apiVersion: cloud.google.com/v1
 kind: BackendConfig
 metadata:
@@ -173,32 +188,17 @@ spec:
     port: 80
     type: HTTP
 ---
-
 apiVersion: cloud.google.com/v1
 kind: BackendConfig
 metadata:
-  name: no-health-check-config
+  name: grafana-health-check-config
   namespace: stage
-spec: {}
----
-
-apiVersion: v1
-kind: Service
-metadata:
-  name: prometheus-grafana 
-  namespace: stage
-  annotations:
-    cloud.google.com/backend-config: '{"default": "no-health-check-config"}'
 spec:
-  type: ExternalName
-  externalName: prometheus-grafana.monitoring.svc.cluster.local
-  ports:
-  - name: http
+  healthCheck:
+    requestPath: /api/health 
     port: 80
-    protocol: TCP
-    targetPort: 80
+    type: HTTP
 ---
-
 apiVersion: networking.gke.io/v1
 kind: ManagedCertificate
 metadata:
@@ -208,7 +208,6 @@ spec:
   domains:
     - dev.k8s.franch.in
 ---
-
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -223,7 +222,6 @@ spec:
     - host: dev.k8s.franch.in
       http:
         paths:
-          
           - path: /grafana
             pathType: Prefix
             backend:
@@ -231,7 +229,6 @@ spec:
                 name: prometheus-grafana 
                 port:
                   number: 80
-          
           - path: /*
             pathType: ImplementationSpecific
             backend:
@@ -240,7 +237,6 @@ spec:
                 port:
                   number: 80
 ---
-
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -301,7 +297,6 @@ spec:
   - from:
       - namespaceSelector: {}
 ---
-
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
