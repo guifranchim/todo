@@ -129,13 +129,3 @@ jobs:
         ENV_NAME=${{ steps.get_env.outputs.ENV_NAME }}
         kubectl rollout status deployment/backend -n $ENV_NAME --timeout=2m
         kubectl rollout status deployment/frontend -n $ENV_NAME --timeout=2m
-        
-    - name: Send Email Notification
-      if: success() && steps.get_env.outputs.ENV_NAME == 'stage'
-      uses: ahmadnassri/action-sendgrid-mail@v2
-      with:
-        from: guilherme@franch.in
-        to: guilhermefranchin2@gmail.com
-        subject: "[Deploy] Nova versão em Stage"
-        html: "A nova versão da aplicação foi implantada no ambiente de <b>stage</b>. Tag: <code>${{ github.sha }}</code>"
-        apiKey: ${{ secrets.SENDGRID_API_KEY }}
