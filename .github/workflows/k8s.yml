@@ -87,23 +87,23 @@ jobs:
     #       --wait
     
     
-    # - name: Configure Docker
-    #   run: gcloud auth configure-docker southamerica-east1-docker.pkg.dev --quiet 
+    - name: Configure Docker
+      run: gcloud auth configure-docker southamerica-east1-docker.pkg.dev --quiet 
 
-    # - name: Build & Push Backend
-    #   uses: docker/build-push-action@v4
-    #   with:
-    #     context: ./backend
-    #     push: true
-    #     tags: southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-backend-repo-${{ steps.get_env.outputs.ENV_NAME }}/${{ env.IMAGE_REPO_BACK }}:${{ github.sha }}
+    - name: Build & Push Backend
+      uses: docker/build-push-action@v4
+      with:
+        context: ./backend
+        push: true
+        tags: southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-backend-repo-${{ steps.get_env.outputs.ENV_NAME }}/${{ env.IMAGE_REPO_BACK }}:${{ github.sha }}
 
-    # - name: Build & Push Frontend
-    #   uses: docker/build-push-action@v4
-    #   with:
-    #     context: . 
-    #     file: ./Dockerfile 
-    #     push: true
-    #     tags: southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-frontend-repo-${{ steps.get_env.outputs.ENV_NAME }}/${{ env.IMAGE_REPO_FRONT }}:${{ github.sha }}
+    - name: Build & Push Frontend
+      uses: docker/build-push-action@v4
+      with:
+        context: . 
+        file: ./Dockerfile 
+        push: true
+        tags: southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-frontend-repo-${{ steps.get_env.outputs.ENV_NAME }}/${{ env.IMAGE_REPO_FRONT }}:${{ github.sha }}
    
     - name: Prepare Manifest File
       run: |
