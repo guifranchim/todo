@@ -203,10 +203,9 @@ spec:
             pathType: Prefix
             backend:
               service:
-                
                 name: grafana-ingress-service 
                 port:
-                  number: 80
+                  name: http
           - path: /*
             pathType: ImplementationSpecific
             backend:
