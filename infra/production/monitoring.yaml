@@ -1,0 +1,77 @@
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: grafana-backend-config
+  namespace: monitoring
+spec:
+  healthCheck:
+    requestPath: /api/health
+    port: 3000
+    type: HTTP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-ingress-service
+  namespace: monitoring
+  annotations:
+    cloud.google.com/backend-config: '{"default": "grafana-backend-config"}'
+    cloud.google.com/neg: '{"ingress": true}'
+spec:
+  type: ClusterIP 
+  selector:
+    app.kubernetes.io/name: grafana
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 3000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-and-health-checks-to-grafana
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: grafana 
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+      - ipBlock:
+          cidr: 130.211.0.0/22
+      - ipBlock:
+          cidr: 35.191.0.0/16
+---
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: grafana-k8s-cert
+  namespace: monitoring
+spec:
+  domains:
+    - grafana.dev.k8s.franch.in 
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana-ingress 
+  namespace: monitoring
+  annotations:
+    kubernetes.io/ingress.global-static-ip-name: ingress-ip-prod-grafana 
+    networking.gke.io/managed-certificates: grafana-k8s-cert 
+    kubernetes.io/ingress.class: "gce"
+spec:
+  rules:
+    - host: grafana.prod.k8s.franch.in 
+      http:
+        paths:
+          - path: / 
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana-ingress-service
+                port:
+                  number: 80
