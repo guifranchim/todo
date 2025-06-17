@@ -74,7 +74,9 @@ resource "google_compute_firewall" "allow_app_traffic" {
       "80",   
       "8080", 
       "3000", 
-      "9090"  
+      "9090",
+      "3001",
+      "9091"
     ]
   }
   source_ranges = ["0.0.0.0/0"] 
