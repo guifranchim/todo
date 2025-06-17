@@ -105,17 +105,25 @@ jobs:
         push: true
         tags: southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-frontend-repo-${{ steps.get_env.outputs.ENV_NAME }}/${{ env.IMAGE_REPO_FRONT }}:${{ github.sha }}
    
-    - name: Prepare Manifest File
+    - name: Prepare and Deploy Manifests
       run: |
         ENV_NAME=${{ steps.get_env.outputs.ENV_NAME }}
+        MANIFEST_DIR="infra/k8s/$ENV_NAME"
+        
         BACK_IMAGE_URL="southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-backend-repo-$ENV_NAME/${{ env.IMAGE_REPO_BACK }}:${{ github.sha }}"
         FRONT_IMAGE_URL="southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-frontend-repo-$ENV_NAME/${{ env.IMAGE_REPO_FRONT }}:${{ github.sha }}"
-        cp infra/$ENV_NAME.yaml manifest.temp.yaml
-        sed -i "s|IMAGE_BACKEND_PLACEHOLDER|$BACK_IMAGE_URL|g" manifest.temp.yaml
-        sed -i "s|IMAGE_FRONTEND_PLACEHOLDER|$FRONT_IMAGE_URL|g" manifest.temp.yaml
-
-    - name: Deploy all resources from Manifest
-      run: kubectl apply -f manifest.temp.yaml
+        
+        echo "Processing manifests from: $MANIFEST_DIR"
+        
+        TEMP_DIR=$(mktemp -d)
+        
+        cp $MANIFEST_DIR/*.yaml $TEMP_DIR/
+        
+        sed -i "s|IMAGE_BACKEND_PLACEHOLDER|$BACK_IMAGE_URL|g" $TEMP_DIR/*.yaml
+        sed -i "s|IMAGE_FRONTEND_PLACEHOLDER|$FRONT_IMAGE_URL|g" $TEMP_DIR/*.yaml
+        
+        echo "--- Applying all manifests from temp directory ---"
+        kubectl apply -f $TEMP_DIR/
 
     - name: Verify deployments
       run: |
