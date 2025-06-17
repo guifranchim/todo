@@ -40,46 +40,49 @@ jobs:
       with:
         install_components: gke-gcloud-auth-plugin
 
-    # - name: Setup Terraform
-    #   uses: hashicorp/setup-terraform@v2
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
 
-    # - name: Terraform Init
-    #   run: |
-    #     ENV_NAME=${{ steps.get_env.outputs.ENV_NAME }}
-    #     TF_BUCKET="tf-state-261909652338-$ENV_NAME"
-    #     terraform init \
-    #       -backend-config="bucket=$TF_BUCKET" \
-    #       -backend-config="prefix=terraform/state/$ENV_NAME"
-    #   working-directory: ${{ env.TERRAFORM_DIR }}
+    - name: Terraform Init
+      run: |
+        ENV_NAME=${{ steps.get_env.outputs.ENV_NAME }}
+        
+        TF_BUCKET="gke-tf-state-bucket-unique-name-12345" 
+        gcloud storage buckets describe gs://${TF_BUCKET} || gcloud storage buckets create gs://${TF_BUCKET} --project=${{ secrets.GCP_PROJECT_ID }} --location=southamerica-east1 --uniform-bucket-level-access
+        terraform init \
+          -backend-config="bucket=$TF_BUCKET" \
+          -backend-config="prefix=terraform/state/$ENV_NAME"
+      working-directory: ${{ env.TERRAFORM_DIR }}
 
-    # - name: Terraform Plan
-    #   run: |
-    #     terraform plan -no-color -out=tfplan \
-    #       -var="gcp_project_id=${{ secrets.GCP_PROJECT_ID }}" \
-    #       -var="gcp_zone=${{ env.GCP_ZONE }}" \
-    #       -var="environment=${{ steps.get_env.outputs.ENV_NAME }}"
-    #   working-directory: ${{ env.TERRAFORM_DIR }}
+    - name: Terraform Plan
+      run: |
+        terraform plan -no-color -out=tfplan \
+          -var="gcp_project_id=${{ secrets.GCP_PROJECT_ID }}" \
+          -var="gcp_zone=${{ env.GCP_ZONE }}" \
+          -var="environment=${{ steps.get_env.outputs.ENV_NAME }}"
+      working-directory: ${{ env.TERRAFORM_DIR }}
 
-    # - name: Terraform Apply
-    #   run: terraform apply -auto-approve -no-color tfplan
-    #   working-directory: ${{ env.TERRAFORM_DIR }}
+    - name: Terraform Apply
+      run: terraform apply -auto-approve -no-color tfplan
+      working-directory: ${{ env.TERRAFORM_DIR }}
     
     - name: Get GKE credentials
       run: |
         gcloud container clusters get-credentials ${{ env.GKE_CLUSTER_BASE_NAME }}-${{ steps.get_env.outputs.ENV_NAME }} \
           --zone ${{ env.GCP_ZONE }} --project ${{ secrets.GCP_PROJECT_ID }}
 
-    # - name: Install/Upgrade Monitoring Stack
-    #   run: |
-    #     curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
-    #     chmod 700 get_helm.sh
-    #     ./get_helm.sh > /dev/null 2>&1
-    #     helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-    #     helm repo update
-    #     helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
-    #       --namespace monitoring --create-namespace \
-    #       --set grafana.service.type=LoadBalancer \
-    #       --wait
+    - name: Install/Upgrade Monitoring Stack
+      run: |
+        curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+        chmod 700 get_helm.sh
+        ./get_helm.sh > /dev/null 2>&1
+        helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+        helm repo update
+        helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
+          --namespace monitoring --create-namespace \
+          --set grafana.service.type=LoadBalancer \
+          --wait
+    
     
     - name: Configure Docker
       run: gcloud auth configure-docker southamerica-east1-docker.pkg.dev --quiet 
@@ -104,24 +107,15 @@ jobs:
         ENV_NAME=${{ steps.get_env.outputs.ENV_NAME }}
         BACK_IMAGE_URL="southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-backend-repo-$ENV_NAME/${{ env.IMAGE_REPO_BACK }}:${{ github.sha }}"
         FRONT_IMAGE_URL="southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-frontend-repo-$ENV_NAME/${{ env.IMAGE_REPO_FRONT }}:${{ github.sha }}"
-        echo "Backend image will be: $BACK_IMAGE_URL"
-        echo "Frontend image will be: $FRONT_IMAGE_URL"
         cp infra/$ENV_NAME.yaml manifest.temp.yaml
         sed -i "s|IMAGE_BACKEND_PLACEHOLDER|$BACK_IMAGE_URL|g" manifest.temp.yaml
         sed -i "s|IMAGE_FRONTEND_PLACEHOLDER|$FRONT_IMAGE_URL|g" manifest.temp.yaml
-        echo "--- Prepared manifest.temp.yaml for $ENV_NAME ---"
-        cat manifest.temp.yaml
 
     - name: Deploy all resources from Manifest
       run: kubectl apply -f manifest.temp.yaml
 
-    - name: Debug Frontend Deployment
-      run: |
-        echo "--- Describing frontend deployment in Kubernetes ---"
-        kubectl describe deployment frontend -n ${{ steps.get_env.outputs.ENV_NAME }}
-
     - name: Verify deployments
       run: |
         ENV_NAME=${{ steps.get_env.outputs.ENV_NAME }}
-        kubectl rollout status deployment/backend -n $ENV_NAME --timeout=2m
-        kubectl rollout status deployment/frontend -n $ENV_NAME --timeout=2m
+        kubectl rollout status deployment/backend -n $ENV_NAME --timeout=3m
+        kubectl rollout status deployment/frontend -n $ENV_NAME --timeout=3m
