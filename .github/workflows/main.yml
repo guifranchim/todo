@@ -125,6 +125,7 @@ jobs:
             --extra-vars "frontend_image_name=${{ env.FRONTEND_IMAGE_NAME }}" \
             --extra-vars "image_tag=${{ github.sha }}" \
             --extra-vars "app_env=${{ steps.get_env.outputs.APP_ENV }}" \
+            --extra-vars "app_dir=/opt/app-${{ steps.get_env.outputs.APP_ENV }}" \
             --extra-vars "db_root_password=${{ secrets.DB_ROOT_PASSWORD }}" \
             --extra-vars "db_user_password=${{ secrets.DB_USER_PASSWORD }}"
         working-directory: ${{ env.ANSIBLE_DIR }}
