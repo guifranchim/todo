@@ -1,70 +1,82 @@
-name: Build and Deploy to GKE
+name: Build, Provision, and Deploy to GKE (YAML Method)
 
 on:
   push:
     branches: [ main, development ]
 
 env:
-  GCP_PROJECT: exalted-legacy-459419-m8
-  GKE_CLUSTER: todo-ua
-  GKE_REGION: southamerica-east1
-  BACK_REPO: todolist-backend-repo
-  FRONT_REPO: todolist-frontend-repo
+  GCP_REGION: southamerica-east1
+  TERRAFORM_DIR: ./terraform-k8s/
+  GKE_CLUSTER_BASE_NAME: todo-ua 
   IMAGE_REPO_BACK: todolist-ua-back
   IMAGE_REPO_FRONT: todolist-ua-front
-  TAG: ${{ github.sha }}
-  ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'stage' }}
-  TERRAFORM_DIR: ./terraform-k8s/
 
 jobs:
-  build-and-deploy:
+  deploy:
+    
+    environment: 
+      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'stage' }}
     runs-on: ubuntu-latest
-    environment: gcp
 
     steps:
-    - uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Get Environment Name
+      id: get_env
+      run: |
+        if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+          echo "ENV_NAME=production" >> $GITHUB_OUTPUT
+        else
+          echo "ENV_NAME=stage" >> $GITHUB_OUTPUT
+        fi
 
     - name: Authenticate to GCP
-      uses: google-github-actions/auth@v1
+      uses: 'google-github-actions/auth@v2'
       with:
-        credentials_json: ${{ secrets.GCP_SA_KEY }}
+        credentials_json: '${{ secrets.GCP_SA_KEY }}'
 
-    - name: Setup gcloud & kubectl
+    - name: Set up Cloud SDK & Kubectl
       uses: google-github-actions/setup-gcloud@v1
       with:
-        project_id: ${{ env.GCP_PROJECT }}
-        export_default_credentials: true
         install_components: gke-gcloud-auth-plugin
 
     - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v3
+      uses: hashicorp/setup-terraform@v2
 
     - name: Terraform Init
-      id: init
       run: |
-        TF_BUCKET="tf-state-261909652338-${{ env.ENV }}"
+        ENV_NAME=${{ steps.get_env.outputs.ENV_NAME }}
+        TF_BUCKET="tf-state-261909652338-$ENV_NAME"
         terraform init \
-          -backend-config="bucket=${TF_BUCKET}" \
-          -backend-config="prefix=terraform/state/${{ env.ENV }}"
-      working-directory: ${{ env.TERRAFORM_DIR }}
-
-    - name: Terraform Validate
-      id: validate
-      run: terraform validate -no-color
-      working-directory: ${{ env.TERRAFORM_DIR }}
-
-    - name: Terraform Plan
-      id: plan
-      run: |
-        terraform plan \
-          -out=tfplan -no-color
+          -backend-config="bucket=$TF_BUCKET" \
+          -backend-config="prefix=terraform/state/$ENV_NAME"
       working-directory: ${{ env.TERRAFORM_DIR }}
 
     - name: Terraform Apply
-      id: apply
-      run: terraform apply -auto-approve tfplan
+      run: |
+        terraform apply -auto-approve -no-color \
+          -var="gcp_project_id=${{ secrets.GCP_PROJECT_ID }}" \
+          -var="environment=${{ steps.get_env.outputs.ENV_NAME }}"
       working-directory: ${{ env.TERRAFORM_DIR }}
+    
+    - name: Get GKE credentials
+      run: |
+        gcloud container clusters get-credentials ${{ env.GKE_CLUSTER_BASE_NAME }}-${{ steps.get_env.outputs.ENV_NAME }} \
+          --region ${{ env.GCP_REGION }} --project ${{ secrets.GCP_PROJECT_ID }}
 
+    - name: Install Helm and Deploy Monitoring
+      run: |
+        curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+        chmod 700 get_helm.sh
+        ./get_helm.sh
+        helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+        helm repo update
+        helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
+          --namespace monitoring --create-namespace \
+          --set grafana.service.type=LoadBalancer \
+          --wait
+    
     - name: Configure Docker
       run: gcloud auth configure-docker us-docker.pkg.dev --quiet
 
@@ -72,60 +84,58 @@ jobs:
       uses: docker/build-push-action@v4
       with:
         context: ./backend
-        file: ./backend/Dockerfile
         push: true
-        tags: |
-          us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.BACK_REPO }}/${{ env.IMAGE_REPO_BACK }}:${{ env.TAG }}
-          us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.BACK_REPO }}/${{ env.IMAGE_REPO_BACK }}:latest
+        tags: us-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-backend-repo-${{ steps.get_env.outputs.ENV_NAME }}/${{ env.IMAGE_REPO_BACK }}:${{ github.sha }}
 
     - name: Build & Push Frontend
       uses: docker/build-push-action@v4
       with:
-        context: .
-        file: ./Dockerfile
+        context: ./frontend
         push: true
-        tags: |
-          us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}-k8s:${{ env.TAG }}
-          us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}-k8s:latest
-        build-args: |
-          BACKEND_HOST=backend-service
+        tags: us-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-frontend-repo-${{ steps.get_env.outputs.ENV_NAME }}/${{ env.IMAGE_REPO_FRONT }}:${{ github.sha }}
 
-    - name: Get GKE credentials
+    - name: Prepare Manifest File
+      id: prepare_manifest
       run: |
-        gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} \
-          --region ${{ env.GKE_REGION }} \
-          --project ${{ env.GCP_PROJECT }}
+        ENV_NAME=${{ steps.get_env.outputs.ENV_NAME }}
+        BACK_REPO_VAR="todolist-backend-repo-$ENV_NAME"
+        FRONT_REPO_VAR="todolist-frontend-repo-$ENV_NAME"
+        cp infra/$ENV_NAME.yaml manifest.temp.yaml
 
-    - name: Deploy all resources
-      run: |
-        kubectl apply -f infra/k8s/${{ env.ENV }}.yaml
+        sed -i "s|__GCP_PROJECT__|${{ secrets.GCP_PROJECT_ID }}|g" manifest.temp.yaml
+        sed -i "s|__BACK_REPO__|$BACK_REPO_VAR|g" manifest.temp.yaml
+        sed -i "s|__FRONT_REPO__|$FRONT_REPO_VAR|g" manifest.temp.yaml
+        sed -i "s|__IMAGE_REPO_BACK__|${{ env.IMAGE_REPO_BACK }}|g" manifest.temp.yaml
+        sed -i "s|__IMAGE_REPO_FRONT__|${{ env.IMAGE_REPO_FRONT }}|g" manifest.temp.yaml
+        
+        echo "Prepared manifest.temp.yaml for $ENV_NAME"
+        cat manifest.temp.yaml
 
-    - name: Update images & wait rollout
-      run: |
-        kubectl set image deployment/backend \
-          backend=us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.BACK_REPO }}/${{ env.IMAGE_REPO_BACK }}:${{ env.TAG }} \
-          -n ${{ env.ENV }}
-        kubectl set image deployment/frontend \
-          frontend=us-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.FRONT_REPO }}/${{ env.IMAGE_REPO_FRONT }}-k8s:${{ env.TAG }} \
-          -n ${{ env.ENV }}
-        kubectl rollout status deployment/backend  -n ${{ env.ENV }}
-        kubectl rollout status deployment/frontend -n ${{ env.ENV }}
+    - name: Deploy all resources from Manifest
+      run: kubectl apply -f manifest.temp.yaml
 
-    - name: Send Email Notification (SendGrid)
-      if: env.ENV == 'stage'
+    - name: Update deployment images to new tag
       run: |
-        curl --request POST \
-          --url https://api.sendgrid.com/v3/mail/send \
-          --header "Authorization: Bearer ${{ secrets.SENDGRID_API_KEY }}" \
-          --header 'Content-Type: application/json' \
-          --data '{
-            "personalizations": [{
-              "to": [{"email": "guilhermefranchin2@gmail.com"}],
-              "subject": "Nova versão do sistema disponível em pré-produção"
-            }],
-            "from": {"email": "guilherme@franch.in"},
-            "content": [{
-              "type": "text/plain",
-              "value": "A nova versão da aplicação foi implantada no ambiente de pré-produção (stage). Tag: '${{ env.TAG }}'"
-            }]
-          }'
+        ENV_NAME=${{ steps.get_env.outputs.ENV_NAME }}
+        BACK_IMAGE="us-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-backend-repo-$ENV_NAME/${{ env.IMAGE_REPO_BACK }}:${{ github.sha }}"
+        FRONT_IMAGE="us-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-frontend-repo-$ENV_NAME/${{ env.IMAGE_REPO_FRONT }}:${{ github.sha }}"
+
+        kubectl set image deployment/backend backend=$BACK_IMAGE -n $ENV_NAME
+        kubectl set image deployment/frontend frontend=$FRONT_IMAGE -n $ENV_NAME
+
+    
+    - name: Verify deployments
+      run: |
+        ENV_NAME=${{ steps.get_env.outputs.ENV_NAME }}
+        kubectl rollout status deployment/backend -n $ENV_NAME --timeout=2m
+        kubectl rollout status deployment/frontend -n $ENV_NAME --timeout=2m
+        
+    - name: Send Email Notification
+      if: success() && steps.get_env.outputs.ENV_NAME == 'stage'
+      uses: ahmadnassri/action-sendgrid-mail@v2
+      with:
+        from: guilherme@franch.in
+        to: guilhermefranchin2@gmail.com
+        subject: "[Deploy] Nova versão em Stage"
+        html: "A nova versão da aplicação foi implantada no ambiente de <b>stage</b>. Tag: <code>${{ github.sha }}</code>"
+        apiKey: ${{ secrets.SENDGRID_API_KEY }}
