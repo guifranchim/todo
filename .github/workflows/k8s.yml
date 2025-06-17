@@ -48,10 +48,7 @@ jobs:
         ENV_NAME=${{ steps.get_env.outputs.ENV_NAME  }}
         TF_BUCKET="tf-state-${{ secrets.GCP_PROJECT_ID }}"
         echo "Using Terraform state bucket: gs://${TF_BUCKET}"
-
         gcloud storage buckets describe gs://${TF_BUCKET} >/dev/null 2>&1 || gcloud storage buckets create gs://${TF_BUCKET} --project=${{ secrets.GCP_PROJECT_ID }} --location=southamerica-east1 --uniform-bucket-level-access
-
-
         terraform init \
           -backend-config="bucket=${TF_BUCKET}" \
           -backend-config="prefix=terraform/state/$ENV_NAME"
@@ -74,18 +71,40 @@ jobs:
         gcloud container clusters get-credentials ${{ env.GKE_CLUSTER_BASE_NAME }}-${{ steps.get_env.outputs.ENV_NAME }} \
           --zone ${{ env.GCP_ZONE }} --project ${{ secrets.GCP_PROJECT_ID }}
 
-    # - name: Install/Upgrade Monitoring Stack
-    #   run: |
-    #     curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
-    #     chmod 700 get_helm.sh
-    #     ./get_helm.sh > /dev/null 2>&1
-    #     helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-    #     helm repo update
-    #     helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
-    #       --namespace monitoring --create-namespace \
-    #       --set grafana.service.type=LoadBalancer \
-    #       --wait
-    
+    - name: Enable GKE Features (Service Import/Export)
+      run: |
+        echo "Enabling GKE Hub API and Multi-cluster Services..."
+        gcloud services enable gkehub.googleapis.com --project=${{ secrets.GCP_PROJECT_ID }}
+        gcloud container fleet multi-cluster-services enable --project=${{ secrets.GCP_PROJECT_ID }}
+
+    - name: Wait for CRDs to be installed
+      run: |
+        echo "Waiting for ServiceImport/ServiceExport CRDs to become available..."
+        for i in {1..18}; do
+          if kubectl get crd serviceimports.net.gke.io > /dev/null 2>&1 && kubectl get crd serviceexports.net.gke.io > /dev/null 2>&1; then
+            echo "CRDs are installed!"
+            exit 0
+          fi
+          echo "Attempt $i: CRDs not found yet, waiting 10 seconds..."
+          sleep 10
+        done
+        echo "Error: Timed out waiting for CRDs to be installed."
+        exit 1
+
+    - name: Install/Upgrade Monitoring Stack (Prometheus + Loki)
+      run: |
+        curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+        chmod 700 get_helm.sh
+        ./get_helm.sh > /dev/null 2>&1
+        helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+        helm repo update
+        helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
+          --namespace monitoring --create-namespace \
+          --set grafana.service.type=LoadBalancer \
+          --set loki.enabled=true \
+          --set promtail.enabled=true \
+          --set grafana.sidecar.datasources.enabled=true \
+          --wait
     
     - name: Configure Docker
       run: gcloud auth configure-docker southamerica-east1-docker.pkg.dev --quiet 
@@ -108,7 +127,7 @@ jobs:
     - name: Prepare and Deploy Manifests
       run: |
         ENV_NAME=${{ steps.get_env.outputs.ENV_NAME }}
-        MANIFEST_DIR="infra/$ENV_NAME"
+        MANIFEST_DIR="infra/k8s/$ENV_NAME"
         
         BACK_IMAGE_URL="southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-backend-repo-$ENV_NAME/${{ env.IMAGE_REPO_BACK }}:${{ github.sha }}"
         FRONT_IMAGE_URL="southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-frontend-repo-$ENV_NAME/${{ env.IMAGE_REPO_FRONT }}:${{ github.sha }}"
