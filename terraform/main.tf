@@ -7,6 +7,12 @@ provider "google" {
   region  = var.gcp_region
 }
 
+resource "google_compute_address" "vm_static_ip" {
+  project = var.gcp_project_id
+  name    = "vm-ip-${var.environment}"
+  region  = var.gcp_region
+}
+
 resource "google_compute_instance" "vm_instance" {
   project      = var.gcp_project_id
   zone         = var.gcp_zone
@@ -23,7 +29,9 @@ resource "google_compute_instance" "vm_instance" {
 
   network_interface {
     network = var.network_name
-    access_config {} 
+    access_config {
+      nat_ip = google_compute_address.vm_static_ip.address
+    }
   }
 
   metadata = {
@@ -42,23 +50,11 @@ resource "google_compute_instance" "vm_instance" {
   ]
 }
 
-
-resource "google_compute_firewall" "allow_http" {
-  project       = var.gcp_project_id
-  name          = "allow-http-vm-${var.environment}"
-  network       = var.network_name
-  allow {
-    protocol = "tcp"
-    ports    = [var.app_port, var.backend_app_port] // Unificando regras
-  }
-  source_ranges = ["0.0.0.0/0"]
-  target_tags   = ["http-server"]
-}
-
 resource "google_compute_firewall" "allow_ssh" {
   project       = var.gcp_project_id
   name          = "allow-ssh-vm-${var.environment}"
   network       = var.network_name
+  direction     = "INGRESS"
   allow {
     protocol = "tcp"
     ports    = ["22"]
@@ -67,53 +63,21 @@ resource "google_compute_firewall" "allow_ssh" {
   target_tags   = ["ssh"]
 }
 
-resource "google_compute_firewall" "allow_monitoring" {
-  count         = var.enable_monitoring ? 1 : 0
+resource "google_compute_firewall" "allow_app_traffic" {
   project       = var.gcp_project_id
-  name          = "allow-monitoring-vm-${var.environment}"
+  name          = "allow-app-traffic-vm-${var.environment}"
   network       = var.network_name
+  direction     = "INGRESS"
   allow {
     protocol = "tcp"
-    ports    = ["3000", "9090"] 
+    ports = [
+      "80",   
+      "8080", 
+      "3000", 
+      "9090"  
+    ]
   }
-  source_ranges = ["0.0.0.0/0"]
-  target_tags   = ["http-server"]
-}
-
-
-resource "google_compute_firewall" "allow_backend_app" {
-  count   = var.backend_app_port != var.app_port ? 1 : 0
-  project = var.gcp_project_id
-  name    = "allow-backend-app-${var.environment}"
-  network = var.network_name
-  allow {
-    protocol = "tcp"
-    ports    = [var.backend_app_port]
-  }
-  source_ranges = ["0.0.0.0/0"]
-  target_tags   = ["http-server"]
-}
-resource "google_compute_firewall" "allow_grafana" {
-  project = var.gcp_project_id
-  name    = "allow-grafana-${var.environment}"
-  network = var.network_name
-  allow {
-    protocol = "tcp"
-    ports    = ["3000"]
-  }
-  source_ranges = ["0.0.0.0/0"]
-  target_tags   = ["http-server"]
-}
-
-resource "google_compute_firewall" "allow_prometheus" {
-  project = var.gcp_project_id
-  name    = "allow-prometheus-${var.environment}"
-  network = var.network_name
-  allow {
-    protocol = "tcp"
-    ports    = ["9090"]
-  }
-  source_ranges = ["0.0.0.0/0"]
+  source_ranges = ["0.0.0.0/0"] 
   target_tags   = ["http-server"]
 }
 
