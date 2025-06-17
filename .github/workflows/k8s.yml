@@ -71,43 +71,24 @@ jobs:
         gcloud container clusters get-credentials ${{ env.GKE_CLUSTER_BASE_NAME }}-${{ steps.get_env.outputs.ENV_NAME }} \
           --zone ${{ env.GCP_ZONE }} --project ${{ secrets.GCP_PROJECT_ID }}
 
-    - name: Setup Helm Repositories
+        - name: Install/Upgrade Monitoring Stack (Prometheus + Grafana)
       run: |
         curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
         chmod 700 get_helm.sh
         ./get_helm.sh > /dev/null 2>&1
+
         helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-        helm repo add grafana https://grafana.github.io/helm-charts
         helm repo update
-        
-    - name: Install/Upgrade Monitoring Stack (Prometheus & Grafana)
-      run: |
-        # Create a values file to add Loki as a datasource in Grafana
-        cat <<EOF > grafana-values.yaml
-        grafana:
-          service:
-            type: LoadBalancer
-          additionalDataSources:
-          - name: Loki
-            type: loki
-            url: http://loki-stack.monitoring.svc.cluster.local:3100
-            access: proxy
-            isDefault: false
-        EOF
 
         helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
           --namespace monitoring --create-namespace \
-          -f grafana-values.yaml \
+          --set grafana.service.type=LoadBalancer \
+          --set grafana.adminUser=admin \
+          --set grafana.adminPassword=admin123 \
+          --set grafana.defaultDashboardsEnabled=true \
+          --set prometheus.service.type=ClusterIP \
           --wait
 
-    - name: Install/Upgrade Logging Stack (Loki & Promtail)
-      run: |
-        helm upgrade --install loki-stack grafana/loki-stack \
-          --namespace monitoring \
-          --set grafana.enabled=false \
-          --set prometheus.enabled=false \
-          --set prometheus.alertmanager.enabled=false \
-          --wait
     
     - name: Configure Docker
       run: gcloud auth configure-docker southamerica-east1-docker.pkg.dev --quiet 
