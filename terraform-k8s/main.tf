@@ -4,13 +4,13 @@ terraform {
 
 provider "google" {
   project = var.gcp_project_id
-  region  = var.gcp_region
+  
 }
 
 resource "google_container_cluster" "primary" {
   project                = var.gcp_project_id
   name                   = "${var.cluster_name}-${var.environment}" 
-  location               = var.gcp_region
+  location               = var.gcp_zone 
   remove_default_node_pool = true
   initial_node_count     = 1
   deletion_protection    = false 
@@ -23,7 +23,7 @@ resource "google_container_cluster" "primary" {
 resource "google_container_node_pool" "primary_nodes" {
   project    = var.gcp_project_id
   name       = "default-pool"
-  location   = var.gcp_region
+  location   = var.gcp_zone 
   cluster    = google_container_cluster.primary.name
   node_count = var.node_count
 
@@ -43,7 +43,7 @@ resource "google_container_node_pool" "primary_nodes" {
 resource "google_artifact_registry_repository" "backend_repo" {
   provider     = google
   project      = var.gcp_project_id
-  location     = "us" 
+  location     = "southamerica-east1" 
   repository_id = "todolist-backend-repo-${var.environment}"
   description  = "Docker repository for backend - ${var.environment}"
   format       = "DOCKER"
@@ -52,7 +52,7 @@ resource "google_artifact_registry_repository" "backend_repo" {
 resource "google_artifact_registry_repository" "frontend_repo" {
   provider     = google
   project      = var.gcp_project_id
-  location     = "us"
+  location     = "southamerica-east1" 
   repository_id = "todolist-frontend-repo-${var.environment}"
   description  = "Docker repository for frontend - ${var.environment}"
   format       = "DOCKER"

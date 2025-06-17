@@ -3,10 +3,10 @@ variable "gcp_project_id" {
   type        = string
 }
 
-variable "gcp_region" {
-  description = "A região onde os recursos serão criados."
+variable "gcp_zone" {
+  description = "A ZONA onde os recursos serão criados (não a região)."
   type        = string
-  default     = "southamerica-east1"
+  default     = "southamerica-east1-b" # <<-- MUDANÇA IMPORTANTE
 }
 
 variable "environment" {
@@ -23,7 +23,7 @@ variable "cluster_name" {
 variable "node_count" {
   description = "O número inicial de nós no node pool."
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "machine_type" {
