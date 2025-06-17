@@ -6,7 +6,7 @@
   tasks:
     - name: Aguardar conexão SSH estar disponível
       ansible.builtin.wait_for_connection:
-        delay: 60
+        delay: 15
         timeout: 300
 
     - name: Atualizar cache do apt e pacotes do sistema
@@ -29,6 +29,7 @@
           - ca-certificates
         state: present
 
+    
     - name: Adicionar chave GPG oficial do Docker
       ansible.builtin.apt_key:
         url: https://download.docker.com/linux/ubuntu/gpg
@@ -59,24 +60,32 @@
         append: yes
       when: ssh_user_on_vm is defined and ssh_user_on_vm != "root"
 
+    
     - name: Criar diretório da aplicação
       ansible.builtin.file:
         path: "{{ app_dir }}"
         state: directory
         mode: '0755'
 
-    - name: Importar chave pública do Google Cloud (para gcloud CLI)
-      ansible.builtin.apt_key:
-        url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
-        state: present
+    - name: Criar diretório para configuração do Prometheus
+      ansible.builtin.file:
+        path: "/opt/monitoring"
+        state: directory
+        mode: '0755'
 
-    - name: Adicionar repositório apt do Google Cloud SDK (para gcloud CLI)
-      ansible.builtin.apt_repository:
-        repo: deb https://packages.cloud.google.com/apt cloud-sdk main
-        state: present
-        filename: google-cloud-sdk
-        update_cache: yes
+    - name: Renderizar template do Prometheus para a VM
+      ansible.builtin.template:
+        src: prometheus.yml.j2
+        dest: /opt/monitoring/prometheus.yml
+        mode: '0644'
 
+    - name: Copiar template do Docker Compose unificado para a VM
+      ansible.builtin.template:
+        src: templates/docker-compose.yml.j2
+        dest: "{{ app_dir }}/docker-compose.yml"
+        mode: '0644'
+
+    
     - name: Instalar Google Cloud CLI
       ansible.builtin.apt:
         name: google-cloud-cli
@@ -88,50 +97,12 @@
       environment:
         PATH: "{{ ansible_env.PATH }}:/usr/local/bin:/snap/bin" 
 
-    - name: Copiar template do Docker Compose para a VM
-      ansible.builtin.template:
-        src: templates/docker-compose.yml.j2
-        dest: "{{ app_dir }}/docker-compose.yml"
-        mode: '0644'
-
-    - name: Fazer pull das imagens Docker (usando docker compose)
-      community.docker.docker_compose_v2: 
-        project_src: "{{ app_dir }}"
-        pull: always
-
-    - name: Iniciar containers com Docker Compose
+    - name: Iniciar todos os containers com Docker Compose
       community.docker.docker_compose_v2: 
         project_src: "{{ app_dir }}"
         state: present
         remove_orphans: yes
-
-    - name: Criar diretório para monitoramento
-      ansible.builtin.file:
-        path: "/opt/monitoring"
-        state: directory
-        mode: '0755'
-
-    - name: Remover diretório errado caso exista
-      ansible.builtin.file:
-        path: /opt/monitoring/prometheus.yml
-        state: absent
-
-    - name: Renderizar template do Prometheus
-      ansible.builtin.template:
-        src: prometheus.yml.j2
-        dest: /opt/monitoring/prometheus.yml
-        mode: '0644'
-
-    - name: Copiar docker-compose para monitoramento
-      ansible.builtin.template:
-        src: "templates/monitoring-compose.yml.j2"
-        dest: "/opt/monitoring/docker-compose.yml"
-        mode: '0644'
-
-    - name: Iniciar containers de monitoramento
-      community.docker.docker_compose_v2:
-        project_src: "/opt/monitoring"
-        state: present
+        pull: always 
 
   handlers:
     - name: Iniciar Docker
