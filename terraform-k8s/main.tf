@@ -11,10 +11,10 @@ variable "gcp_region" {
   default     = "southamerica-east1"
 }
 
-variable "tf_state_bucket_name" {
-  description = "O nome do bucket GCS para armazenar o estado do Terraform."
-  type        = string
-  default     = "tf-state-261909652338-bucket"
+variable "state_environments" {
+  description = "Ambientes para criar buckets de state."
+  type        = list(string)
+  default     = ["stage", "production"]
 }
 
 variable "cluster_name" {
@@ -57,7 +57,7 @@ provider "google" {
 }
 
 resource "google_storage_bucket" "tf_state" {
-  name          = var.tf_state_bucket_name
+  name                        = "tf-state-261909652338-${each.value}"
   project       = var.gcp_project_id
   location      = var.gcp_region
   force_destroy = true
