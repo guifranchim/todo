@@ -127,7 +127,8 @@ jobs:
             --extra-vars "app_env=${{ steps.get_env.outputs.APP_ENV }}" \
             --extra-vars "app_dir=/opt/app-${{ steps.get_env.outputs.APP_ENV }}" \
             --extra-vars "db_root_password=${{ secrets.DB_ROOT_PASSWORD }}" \
-            --extra-vars "db_user_password=${{ secrets.DB_USER_PASSWORD }}"
+            --extra-vars "db_user_password=${{ secrets.DB_USER_PASSWORD }}" \
+            --extra-vars "grafana_admin_password=admin"
         working-directory: ${{ env.ANSIBLE_DIR }}
 
       - name: Final Output
