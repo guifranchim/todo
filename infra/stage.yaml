@@ -161,6 +161,9 @@ spec:
         image: us-docker.pkg.dev/${GCP_PROJECT}/${FRONT_REPO}/${IMAGE_REPO_FRONT}:latest
         ports:
         - containerPort: 80
+        env:
+        - name: BACKEND_HOST
+          value: "backend-service.stage.svc.cluster.local"
 ---
 apiVersion: v1
 kind: Service
