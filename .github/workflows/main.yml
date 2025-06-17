@@ -50,7 +50,7 @@ jobs:
         
       - name: Terraform Init
         run: |
-          TF_BUCKET="tf-state-${{ secrets.GCP_PROJECT_ID }}"
+          TF_BUCKET="tf-state-vm-${{ secrets.GCP_PROJECT_ID }}"
           gcloud storage buckets describe gs://${TF_BUCKET} >/dev/null 2>&1 || gcloud storage buckets create gs://${TF_BUCKET} --project=${{ secrets.GCP_PROJECT_ID }} --location=${{ env.GCP_REGION }}
           terraform init \
             -backend-config="bucket=${TF_BUCKET}" \
