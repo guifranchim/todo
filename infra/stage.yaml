@@ -209,8 +209,8 @@ spec:
     - host: dev.k8s.franch.in
       http:
         paths:
-          - path: /todo
-            pathType: Prefix
+          - path: /*
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: frontend-service
@@ -229,6 +229,8 @@ kind: Service
 metadata:
   name: prometheus-grafana 
   namespace: stage
+  annotations:
+    cloud.google.com/backend-config: '{"default": "no-health-check-config"}'
 spec:
   type: ExternalName
   externalName: prometheus-grafana.monitoring.svc.cluster.local
