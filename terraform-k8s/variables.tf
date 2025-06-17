@@ -6,7 +6,7 @@ variable "gcp_project_id" {
 variable "gcp_zone" {
   description = "A ZONA onde os recursos serão criados (não a região)."
   type        = string
-  default     = "southamerica-east1-b" # <<-- MUDANÇA IMPORTANTE
+  default     = "southamerica-east1-b" 
 }
 
 variable "environment" {
