@@ -285,13 +285,12 @@ spec:
     - Ingress
   ingress:
   - from:
-      - podSelector: {}
-      - namespaceSelector: {}
+        - ipBlock:
+            cidr: 130.211.0.0/22
+        - ipBlock:
+            cidr: 35.191.0.0/16
   - from:
-      - ipBlock:
-          cidr: 130.211.0.0/22
-      - ipBlock:
-          cidr: 35.191.0.0/16
+      - namespaceSelector: {}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -305,16 +304,13 @@ spec:
   policyTypes:
     - Ingress
   ingress:
-  - from:
-      - namespaceSelector:
-          matchLabels:
-            kubernetes.io/metadata.name: stage
-      - namespaceSelector:
-          matchLabels:
-            kubernetes.io/metadata.name: production
-  - from:
-      # Permite explicitamente os Health Checkers do Google
+    - from:
       - ipBlock:
           cidr: 130.211.0.0/22
       - ipBlock:
           cidr: 35.191.0.0/16
+    
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: stage
