@@ -12,7 +12,7 @@ ENV BACKEND_HOST=${BACKEND_HOST}
 
 RUN apk add --no-cache gettext
 
-COPY ./server.conf.template /etc/nginx/conf.d/default.conf.template
+COPY ./nginx.conf /etc/nginx/conf.d/default.conf.template
 
 RUN envsubst '$$BACKEND_HOST' \
     < /etc/nginx/conf.d/default.conf.template \
