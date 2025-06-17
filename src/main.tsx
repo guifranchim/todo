@@ -9,34 +9,27 @@ const LandingPage = lazy(() => import("./pages/LandingPage"));
 const ToDo = lazy(() => import("./pages/ToDo"));
 const NotFound = lazy(() => import("./components/NotFound"));
 
-const router = createBrowserRouter([
+const router = createBrowserRouter(
+  [
+    {
+      path: "/",
+      element: (
+        <Suspense fallback={<div>Loading...</div>}>
+          <ToDo />
+        </Suspense>
+      ),
+      errorElement: (
+        <Suspense fallback={<div>Loading...</div>}>
+          <NotFound />
+        </Suspense>
+      ),
+    },
+  ],
   {
-    path: "/",
-    element: (
-      <Suspense fallback={<div>Loading...</div>}>
-        <LandingPage />
-      </Suspense>
-    ),
-    errorElement: (
-      <Suspense fallback={<div>Loading...</div>}>
-        <NotFound />
-      </Suspense>
-    ),
-  },
-  {
-    path: "/to-do",
-    element: (
-      <Suspense fallback={<div>Loading...</div>}>
-        <ToDo />
-      </Suspense>
-    ),
-    errorElement: (
-      <Suspense fallback={<div>Loading...</div>}>
-        <NotFound />
-      </Suspense>
-    ),
-  },
-]);
+    basename: "/todo", 
+  }
+);
+
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   // <React.StrictMode>
