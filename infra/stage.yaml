@@ -152,7 +152,6 @@ metadata:
   name: frontend-service
   namespace: stage
   annotations:
-    
     cloud.google.com/backend-config: '{"default": "frontend-health-check-config"}'
 spec:
   type: ClusterIP 
@@ -178,13 +177,9 @@ spec:
 apiVersion: cloud.google.com/v1
 kind: BackendConfig
 metadata:
-  name: grafana-health-check-config
+  name: no-health-check-config
   namespace: stage
-spec:
-  healthCheck:
-    requestPath: /api/health 
-    port: 80
-    type: HTTP
+spec: {}
 ---
 
 apiVersion: v1
@@ -193,7 +188,7 @@ metadata:
   name: prometheus-grafana 
   namespace: stage
   annotations:
-    cloud.google.com/backend-config: '{"default": "grafana-health-check-config"}'
+    cloud.google.com/backend-config: '{"default": "no-health-check-config"}'
 spec:
   type: ExternalName
   externalName: prometheus-grafana.monitoring.svc.cluster.local
