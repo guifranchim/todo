@@ -57,3 +57,16 @@ resource "google_artifact_registry_repository" "frontend_repo" {
   description  = "Docker repository for frontend - ${var.environment}"
   format       = "DOCKER"
 }
+
+resource "google_compute_firewall" "allow_health_checks" {
+  project = var.gcp_project_id
+  name    = "allow-gke-health-checks-${var.environment}"
+  network = "default"
+  priority = 900 
+
+  allow {
+    protocol = "tcp"
+  }
+
+  source_ranges = ["130.211.0.0/22", "35.191.0.0/16"]
+}
