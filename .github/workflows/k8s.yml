@@ -88,20 +88,20 @@ jobs:
           --set grafana.defaultDashboardsEnabled=true \
           --set prometheus.service.type=ClusterIP \
           --wait
-          
-    - name: Install/Upgrade Loki Stack
-    run: |
-      helm repo add grafana https://grafana.github.io/helm-charts
-      helm repo update
 
-      helm upgrade --install loki grafana/loki-stack \
-        --namespace monitoring --create-namespace \
-        --set grafana.enabled=false \
-        --set promtail.enabled=true \
-        --set loki.persistence.enabled=true \
-        --set loki.persistence.size=10Gi \
-        --set loki.persistence.storageClassName=standard \
-        --wait
+    - name: Install/Upgrade Loki Stack
+      run: |
+        helm repo add grafana https://grafana.github.io/helm-charts
+        helm repo update
+
+        helm upgrade --install loki grafana/loki-stack \
+          --namespace monitoring --create-namespace \
+          --set grafana.enabled=false \
+          --set promtail.enabled=true \
+          --set loki.persistence.enabled=true \
+          --set loki.persistence.size=10Gi \
+          --set loki.persistence.storageClassName=standard \
+          --wait
     
     - name: Configure Docker
       run: gcloud auth configure-docker southamerica-east1-docker.pkg.dev --quiet 
