@@ -71,7 +71,7 @@ jobs:
         gcloud container clusters get-credentials ${{ env.GKE_CLUSTER_BASE_NAME }}-${{ steps.get_env.outputs.ENV_NAME }} \
           --zone ${{ env.GCP_ZONE }} --project ${{ secrets.GCP_PROJECT_ID }}
 
-        - name: Install/Upgrade Monitoring Stack (Prometheus + Grafana)
+    - name: Install/Upgrade Monitoring Stack
       run: |
         curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
         chmod 700 get_helm.sh
@@ -88,7 +88,20 @@ jobs:
           --set grafana.defaultDashboardsEnabled=true \
           --set prometheus.service.type=ClusterIP \
           --wait
+          
+    - name: Install/Upgrade Loki Stack
+    run: |
+      helm repo add grafana https://grafana.github.io/helm-charts
+      helm repo update
 
+      helm upgrade --install loki grafana/loki-stack \
+        --namespace monitoring --create-namespace \
+        --set grafana.enabled=false \
+        --set promtail.enabled=true \
+        --set loki.persistence.enabled=true \
+        --set loki.persistence.size=10Gi \
+        --set loki.persistence.storageClassName=standard \
+        --wait
     
     - name: Configure Docker
       run: gcloud auth configure-docker southamerica-east1-docker.pkg.dev --quiet 
