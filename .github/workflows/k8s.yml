@@ -48,7 +48,10 @@ jobs:
         ENV_NAME=${{ steps.get_env.outputs.ENV_NAME  }}
         TF_BUCKET="tf-state-${{ secrets.GCP_PROJECT_ID }}"
         echo "Using Terraform state bucket: gs://${TF_BUCKET}"
+
         gcloud storage buckets describe gs://${TF_BUCKET} >/dev/null 2>&1 || gcloud storage buckets create gs://${TF_BUCKET} --project=${{ secrets.GCP_PROJECT_ID }} --location=southamerica-east1 --uniform-bucket-level-access
+
+
         terraform init \
           -backend-config="bucket=${TF_BUCKET}" \
           -backend-config="prefix=terraform/state/$ENV_NAME"
@@ -76,19 +79,13 @@ jobs:
         curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
         chmod 700 get_helm.sh
         ./get_helm.sh > /dev/null 2>&1
-
         helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
         helm repo update
-
         helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
           --namespace monitoring --create-namespace \
           --set grafana.service.type=LoadBalancer \
-          --set grafana.adminUser=admin \
-          --set grafana.adminPassword=admin123 \
-          --set grafana.defaultDashboardsEnabled=true \
-          --set prometheus.service.type=ClusterIP \
           --wait
-
+    
     - name: Install/Upgrade Loki Stack
       run: |
         helm repo add grafana https://grafana.github.io/helm-charts
@@ -102,7 +99,7 @@ jobs:
           --set loki.persistence.size=10Gi \
           --set loki.persistence.storageClassName=standard \
           --wait
-    
+
     - name: Configure Docker
       run: gcloud auth configure-docker southamerica-east1-docker.pkg.dev --quiet 
 
@@ -121,17 +118,25 @@ jobs:
         push: true
         tags: southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-frontend-repo-${{ steps.get_env.outputs.ENV_NAME }}/${{ env.IMAGE_REPO_FRONT }}:${{ github.sha }}
    
-    - name: Prepare Manifest File
+    - name: Prepare and Deploy Manifests
       run: |
         ENV_NAME=${{ steps.get_env.outputs.ENV_NAME }}
+        MANIFEST_DIR="infra/$ENV_NAME"
+        
         BACK_IMAGE_URL="southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-backend-repo-$ENV_NAME/${{ env.IMAGE_REPO_BACK }}:${{ github.sha }}"
         FRONT_IMAGE_URL="southamerica-east1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/todolist-frontend-repo-$ENV_NAME/${{ env.IMAGE_REPO_FRONT }}:${{ github.sha }}"
-        cp infra/$ENV_NAME.yaml manifest.temp.yaml
-        sed -i "s|IMAGE_BACKEND_PLACEHOLDER|$BACK_IMAGE_URL|g" manifest.temp.yaml
-        sed -i "s|IMAGE_FRONTEND_PLACEHOLDER|$FRONT_IMAGE_URL|g" manifest.temp.yaml
-
-    - name: Deploy all resources from Manifest
-      run: kubectl apply -f manifest.temp.yaml
+        
+        echo "Processing manifests from: $MANIFEST_DIR"
+        
+        TEMP_DIR=$(mktemp -d)
+        
+        cp $MANIFEST_DIR/*.yaml $TEMP_DIR/
+        
+        sed -i "s|IMAGE_BACKEND_PLACEHOLDER|$BACK_IMAGE_URL|g" $TEMP_DIR/*.yaml
+        sed -i "s|IMAGE_FRONTEND_PLACEHOLDER|$FRONT_IMAGE_URL|g" $TEMP_DIR/*.yaml
+        
+        echo "--- Applying all manifests from temp directory ---"
+        kubectl apply -f $TEMP_DIR/
 
     - name: Verify deployments
       run: |
