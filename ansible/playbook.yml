@@ -1,4 +1,4 @@
-- name: Configurar VM para deploy da aplicação e monitoramento
+- name: Configurar VM e fazer deploy da aplicação
   hosts: all
   become: yes
   gather_facts: yes
@@ -9,44 +9,104 @@
         delay: 15
         timeout: 300
 
-    - name: Atualizar cache do apt e instalar pacotes para Docker
+    - name: Atualizar cache do apt e pacotes do sistema
+      ansible.builtin.apt:
+        update_cache: yes
+        upgrade: dist
+        autoremove: yes
+      register: apt_upgrade_status
+      changed_when: "'0 upgraded, 0 newly installed' not in apt_upgrade_status.stdout"
+      retries: 3
+      delay: 10
+
+    - name: Instalar pacotes essenciais
       ansible.builtin.apt:
         name:
+          - curl
+          - gnupg
+          - software-properties-common
           - apt-transport-https
           - ca-certificates
-          - curl
-          - software-properties-common
-          - python3-pip
+        state: present
+
+    
+    - name: Adicionar chave GPG oficial do Docker
+      ansible.builtin.apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Adicionar repositório Docker
+      ansible.builtin.apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+        filename: docker
+
+    - name: Instalar Docker Engine, CLI, Containerd e Docker Compose plugin
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
         state: present
         update_cache: yes
+      notify: Iniciar Docker
 
-    - name: Adicionar chave GPG oficial do Docker
-      ansible.builtin.get_url:
-        url: https://download.docker.com/linux/ubuntu/gpg
-        dest: /etc/apt/keyrings/docker.asc
-        mode: '0644'
-        force: yes
-
-    - name: Adicionar usuário ao grupo docker
+    - name: Adicionar usuário {{ ssh_user_on_vm }} ao grupo docker (se existir)
       ansible.builtin.user:
-        name: "{{ ansible_user }}"
+        name: "{{ ssh_user_on_vm }}"
         groups: docker
         append: yes
+      when: ssh_user_on_vm is defined and ssh_user_on_vm != "root"
 
+    
     - name: Criar diretório da aplicação
       ansible.builtin.file:
         path: "{{ app_dir }}"
         state: directory
         mode: '0755'
 
-    - name: Renderizar template do Docker Compose para a VM
+    - name: Criar diretório para configuração do Prometheus
+      ansible.builtin.file:
+        path: "/opt/monitoring"
+        state: directory
+        mode: '0755'
+
+    - name: Renderizar template do Prometheus para a VM
+      ansible.builtin.template:
+        src: prometheus.yml.j2
+        dest: /opt/monitoring/prometheus.yml
+        mode: '0644'
+
+    - name: Copiar template do Docker Compose unificado para a VM
       ansible.builtin.template:
         src: templates/docker-compose.yml.j2
         dest: "{{ app_dir }}/docker-compose.yml"
         mode: '0644'
-        
-    - name: Iniciar (ou recriar) os contêineres da aplicação
-      community.docker.docker_compose_v2:
+
+    
+    - name: Instalar Google Cloud CLI
+      ansible.builtin.apt:
+        name: google-cloud-cli
+        state: present
+
+    - name: Autenticar Docker com o Google Artifact Registry (via gcloud na VM)
+      ansible.builtin.command: gcloud auth configure-docker {{ gcp_region }}-docker.pkg.dev --quiet
+      changed_when: false
+      environment:
+        PATH: "{{ ansible_env.PATH }}:/usr/local/bin:/snap/bin" 
+
+    - name: Iniciar todos os containers com Docker Compose
+      community.docker.docker_compose_v2: 
         project_src: "{{ app_dir }}"
-        state: present 
-        recreate: 'always'  
+        state: present
+        remove_orphans: yes
+        pull: always 
+
+  handlers:
+    - name: Iniciar Docker
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: yes

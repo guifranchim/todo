@@ -3,32 +3,37 @@ version: '3'
 services:
   prometheus:
     image: prom/prometheus
-    container_name: "prometheus-stage"
+    container_name: "prometheus-{{ app_env }}" 
     ports:
       - "9090:9090"
     volumes:
+      
       - /opt/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
     restart: unless-stopped
     networks:
-      - app-network
+      - app-network 
 
   grafana:
     image: grafana/grafana
-    container_name: "grafana-stage"
+    container_name: "grafana-{{ app_env }}"
     ports:
       - "3000:3000"
     volumes:
       - grafana-storage:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SECURITY_ADMIN_PASSWORD={{ grafana_admin_password | default('admin') }}
     restart: unless-stopped
     depends_on:
       - prometheus
     networks:
-      - app-network
+      - app-network 
 
-  node-exporter:
+volumes:
+  grafana-storage:
+
+networks:
+  
+  app-network:
+    external: true
