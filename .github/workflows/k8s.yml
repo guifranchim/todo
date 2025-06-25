@@ -79,26 +79,20 @@ jobs:
         curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
         chmod 700 get_helm.sh
         ./get_helm.sh > /dev/null 2>&1
+
         helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
         helm repo update
+
         helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
           --namespace monitoring --create-namespace \
           --set grafana.service.type=LoadBalancer \
-          --wait
-    
-    - name: Install/Upgrade Loki Stack
-      run: |
-        helm repo add grafana https://grafana.github.io/helm-charts
-        helm repo update
+          --set grafana.sidecar.datasources.enabled=true \
+          --set grafana.sidecar.datasources.label=grafana_datasource \
+          --set grafana.sidecar.dashboards.enabled=true \
+          --set grafana.defaultDashboardsEnabled=true \
+          --wait \
+          --timeout 15m
 
-        helm upgrade --install loki grafana/loki-stack \
-          --namespace monitoring --create-namespace \
-          --set grafana.enabled=false \
-          --set promtail.enabled=true \
-          --set loki.persistence.enabled=true \
-          --set loki.persistence.size=10Gi \
-          --set loki.persistence.storageClassName=standard \
-          --wait
 
     - name: Configure Docker
       run: gcloud auth configure-docker southamerica-east1-docker.pkg.dev --quiet 
