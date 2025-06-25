@@ -10,3 +10,6 @@ frontend_artifact_repo: todolist-frontend-repo
 backend_image_name: todolist-ua-back
 frontend_image_name: todolist-ua-front
 image_tag: latest
+db_root_password: "admin"
+db_user_password: "admin"
+gcp_region: southamerica-east1
