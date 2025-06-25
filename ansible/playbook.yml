@@ -1,3 +1,4 @@
+
 - name: Configurar VM para deploy da aplicação e monitoramento
   hosts: all
   become: yes
@@ -9,30 +10,85 @@
         delay: 15
         timeout: 300
 
-    - name: Atualizar cache do apt e pacotes do sistema
-      ansible.builtin.apt:
-        update_cache: yes
-        upgrade: dist
-        autoremove: yes
-
     - name: Instalar pacotes essenciais
       ansible.builtin.apt:
         name:
+          - ca-certificates
           - curl
           - gnupg
-          - software-properties-common
-          - apt-transport-https
-          - ca-certificates
+        state: present
+        update_cache: yes
+
+    - name: Adicionar chave GPG oficial do Docker
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        mode: '0644'
+        force: true
+
+    - name: Adicionar repositório do Docker
+      ansible.builtin.apt_repository:
+        repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_lsb.codename }} stable"
         state: present
 
-    - name: Criar diretório para configuração do Prometheus
+    - name: Instalar Docker Engine, CLI, e plugins
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin 
+        state: present
+        update_cache: yes
+
+    - name: Garantir que o serviço Docker está ativo
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Adicionar usuário ao grupo docker para executar comandos sem sudo
+      ansible.builtin.user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
+
+    - name: Resetar conexão para aplicar a mudança de grupo
+      ansible.builtin.meta: reset_connection
+
+    
+    
+    - name: Instalar Google Cloud SDK
+      ansible.builtin.apt:
+        name: google-cloud-sdk
+        state: present
+      when: "'google-cloud-sdk' not in ansible_facts.packages"
+
+    - name: Autenticar Docker com o Google Artifact Registry
+      ansible.builtin.command: "gcloud auth configure-docker {{ gcp_region }}-docker.pkg.dev --quiet"
+      changed_when: false 
+
+    - name: Criar diretório da aplicação
       ansible.builtin.file:
-        path: "/opt/monitoring"
+        path: "{{ app_dir }}"
         state: directory
         mode: '0755'
 
     - name: Renderizar template do Prometheus para a VM
       ansible.builtin.template:
-        src: prometheus.yml.j2
-        dest: /opt/monitoring/prometheus.yml
+        src: templates/prometheus.yml.j2
+        dest: "{{ app_dir }}/prometheus.yml"
         mode: '0644'
+
+    - name: Renderizar template do Docker Compose para a VM
+      ansible.builtin.template:
+        src: docker-compose.yml.j2
+        dest: "{{ app_dir }}/docker-compose.yml"
+        mode: '0644'
+
+    - name: Fazer deploy/update da stack com Docker Compose
+      community.docker.docker_compose_v2:
+        project_src: "{{ app_dir }}"
+        state: present 
+        pull: always   

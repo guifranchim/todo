@@ -3,15 +3,15 @@ name: Deploy Application to VM
 on:
   push:
     branches: [ main, development ]
-  workflow_dispatch: 
+  workflow_dispatch:
 
 env:
-  BACKEND_ARTIFACT_REPO: todolist-backend-repo-vm 
+  BACKEND_ARTIFACT_REPO: todolist-backend-repo-vm
   FRONTEND_ARTIFACT_REPO: todolist-frontend-repo-vm
-  
+
   BACKEND_IMAGE_NAME: todolist-ua-back-vm
   FRONTEND_IMAGE_NAME: todolist-ua-front-vm
-  
+
   TERRAFORM_DIR: ./terraform
   ANSIBLE_DIR: ./ansible
   SSH_USER_ON_VM: githubactions
@@ -22,11 +22,10 @@ jobs:
   build-provision-deploy:
     name: Build, Provision, and Deploy
     runs-on: ubuntu-latest
-    
-    
-    environment: 
+
+    environment:
       name: ${{ github.ref == 'refs/heads/main' && 'production' || 'stage' }}
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -43,11 +42,11 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }} 
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
-        
+
       - name: Terraform Init
         run: |
           TF_BUCKET="tf-state-vm-${{ secrets.GCP_PROJECT_ID }}"
@@ -72,7 +71,7 @@ jobs:
       - name: Configure Docker
         run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
 
-      
+
       - name: Build and Push Backend Image
         uses: docker/build-push-action@v5
         with:
@@ -83,12 +82,10 @@ jobs:
       - name: Build and Push Frontend Image
         uses: docker/build-push-action@v5
         with:
-          context: . 
-          file: ./Dockerfile 
+          context: .
+          file: ./Dockerfile
           push: true
           tags: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.FRONTEND_ARTIFACT_REPO }}-${{ steps.get_env.outputs.APP_ENV }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ github.sha }}
-          build-args: | 
-            BACKEND_HOST=backend 
 
       - name: Get VM Public IP from Terraform Output
         id: get_ip
@@ -97,7 +94,7 @@ jobs:
           echo "VM_PUBLIC_IP=$VM_IP" >> $GITHUB_ENV
         working-directory: ${{ env.TERRAFORM_DIR }}
 
-      
+
       - name: Setup SSH and Ansible
         run: |
           mkdir -p ~/.ssh
@@ -108,8 +105,8 @@ jobs:
           echo "StrictHostKeyChecking no" > ~/.ssh/config
           echo "UserKnownHostsFile /dev/null" >> ~/.ssh/config
           python -m pip install --upgrade pip
-          pip install ansible-core
-          ansible-galaxy collection install community.docker google.cloud
+          pip install "ansible-core>=2.15" "ansible-runner" # Instala Ansible e dependências
+          ansible-galaxy collection install community.docker google.cloud # Instala coleções necessárias
 
       - name: Run Ansible Playbook
         run: |
@@ -128,8 +125,12 @@ jobs:
             --extra-vars "app_dir=/opt/app-${{ steps.get_env.outputs.APP_ENV }}" \
             --extra-vars "db_root_password=${{ secrets.DB_ROOT_PASSWORD }}" \
             --extra-vars "db_user_password=${{ secrets.DB_USER_PASSWORD }}" \
-            --extra-vars "grafana_admin_password=admin"
+            --extra-vars "grafana_admin_password=${{ secrets.GRAFANA_ADMIN_PASSWORD }}"
         working-directory: ${{ env.ANSIBLE_DIR }}
 
       - name: Final Output
-        run: echo "Deployment for ${{ steps.get_env.outputs.APP_ENV }} successful. Access at http://${{ env.VM_PUBLIC_IP }}"
+        run: |
+          echo "Deployment for ${{ steps.get_env.outputs.APP_ENV }} successful."
+          echo "Application available at http://${{ env.VM_PUBLIC_IP }}"
+          echo "Grafana available at http://${{ env.VM_PUBLIC_IP }}:3001"
+          echo "Prometheus available at http://${{ env.VM_PUBLIC_IP }}:9090"
