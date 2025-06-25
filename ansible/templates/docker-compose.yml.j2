@@ -1,33 +1,82 @@
----
+version: '3'
+
+networks:
+  app-network:
+    driver: bridge
+    name: "app-network-{{ app_env }}"
+
+volumes:
+  mysql_data:
+  grafana_data:
+
 services:
-  prometheus:
-    image: prom/prometheus
-    container_name: "prometheus-stage"
-    ports:
-      - "9090:9090"
+
+  db:
+    image: mysql:8.0
+    container_name: "mysql_db-{{ app_env }}"
+    hostname: "mysql_db-{{ app_env }}"
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: "{{ db_root_password }}"
+      MYSQL_DATABASE: "tasks_db"
+      MYSQL_USER: "tasks_user"
+      MYSQL_PASSWORD: "{{ db_user_password }}"
     volumes:
-      - /opt/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-    restart: unless-stopped
+      - mysql_data:/var/lib/mysql
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+
+  backend:
+    image: "{{ gcp_region }}-docker.pkg.dev/{{ gcp_project_id }}/{{ backend_artifact_repo }}/{{ backend_image_name }}:{{ image_tag }}"
+    container_name: "backend-{{ app_env }}"
+    hostname: "backend-{{ app_env }}"
+    restart: always
+    ports:
+      - "8080:3000"
+    environment:
+      DB_HOST: "mysql_db-{{ app_env }}"
+      DB_USER: "tasks_user"
+      DB_PASSWORD: "{{ db_user_password }}"
+      DB_DATABASE: "tasks_db"
+    depends_on:
+      db:
+        condition: service_healthy
     networks:
       - app-network
 
-  grafana:
-    image: grafana/grafana
-    container_name: "grafana-stage"
+  frontend:
+    image: "{{ gcp_region }}-docker.pkg.dev/{{ gcp_project_id }}/{{ frontend_artifact_repo }}/{{ frontend_image_name }}:{{ image_tag }}"
+    container_name: "frontend-{{ app_env }}"
+    hostname: "frontend-{{ app_env }}"
     ports:
-      - "3000:3000"
-    volumes:
-      - grafana-storage:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning
+      - "80:80"
+    restart: always
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_USERS_ALLOW_SIGN_UP=false
-    restart: unless-stopped
+      - REACT_APP_BACKEND_HOST=http://{{ VM_PUBLIC_IP | default('localhost') }}:8080
     depends_on:
-      - prometheus
+      - backend
     networks:
       - app-network
 
   node-exporter:
+    image: prom/node-exporter:v1.8.1
+    container_name: "node-exporter-{{ app_env }}"
+    hostname: "node-exporter-{{ app_env }}"
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+    networks:
+      - app-network
