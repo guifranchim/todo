@@ -16,7 +16,7 @@ const TodoList = ({ onDelete, onChangeCheckbox }: TodoListProps) => {
         [taskListState.length]
     );
 
-    console.log("NOVO CONSOLE LOG");
+    console.log("STAGEEEEE");
 
     return (
         <>
