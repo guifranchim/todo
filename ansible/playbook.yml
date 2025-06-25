@@ -57,6 +57,19 @@
     - name: Resetar conexão para aplicar a mudança de grupo
       ansible.builtin.meta: reset_connection
 
+    - name: Adicionar chave GPG do Google Cloud
+      ansible.builtin.get_url:
+        url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+        dest: /etc/apt/keyrings/google-cloud.asc
+        mode: '0644'
+        force: true
+
+    - name: Adicionar repositório do Google Cloud
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/etc/apt/keyrings/google-cloud.asc] https://packages.cloud.google.com/apt cloud-sdk main"
+        state: present
+        update_cache: yes
+
     - name: Instalar Google Cloud SDK
       ansible.builtin.apt:
         name: google-cloud-sdk
