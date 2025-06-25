@@ -9,30 +9,46 @@
         delay: 15
         timeout: 300
 
-    - name: Atualizar cache do apt e pacotes do sistema
-      ansible.builtin.apt:
-        update_cache: yes
-        upgrade: dist
-        autoremove: yes
-
-    - name: Instalar pacotes essenciais
+    - name: Atualizar cache do apt e instalar pacotes para Docker
       ansible.builtin.apt:
         name:
-          - curl
-          - gnupg
-          - software-properties-common
           - apt-transport-https
           - ca-certificates
+          - curl
+          - software-properties-common
+          - python3-pip
         state: present
+        update_cache: yes
 
-    - name: Criar diretório para configuração do Prometheus
+    - name: Adicionar chave GPG oficial do Docker
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        mode: '0644'
+        force: yes
+
+    - name: Adicionar usuário ao grupo docker
+      ansible.builtin.user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
+
+    - name: Criar diretório da aplicação
       ansible.builtin.file:
-        path: "/opt/monitoring"
+        path: "{{ app_dir }}"
         state: directory
         mode: '0755'
 
-    - name: Renderizar template do Prometheus para a VM
+    - name: Renderizar template do Docker Compose para a VM
       ansible.builtin.template:
-        src: prometheus.yml.j2
-        dest: /opt/monitoring/prometheus.yml
+        src: templates/docker-compose.yml.j2
+        dest: "{{ app_dir }}/docker-compose.yml"
         mode: '0644'
+        
+    - name: Iniciar (ou recriar) os contêineres da aplicação
+      community.docker.docker_compose_v2:
+        project_src: "{{ app_dir }}"
+        state: present 
+        pull: always   
+        restarted: yes 
+        recreated: always 
