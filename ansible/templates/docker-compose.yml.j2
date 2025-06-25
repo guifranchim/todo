@@ -17,10 +17,10 @@ services:
     hostname: "db-{{ app_env }}"
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: "{{ db_root_password }}"
+      MYSQL_ROOT_PASSWORD: "mysql"
       MYSQL_DATABASE: "tasks_db"
       MYSQL_USER: "tasks_user"
-      MYSQL_PASSWORD: "{{ db_user_password }}"
+      MYSQL_PASSWORD: "mysql"
     volumes:
       - mysql_data:/var/lib/mysql
     networks:
