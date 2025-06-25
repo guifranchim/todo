@@ -57,13 +57,10 @@
     - name: Resetar conexão para aplicar a mudança de grupo
       ansible.builtin.meta: reset_connection
 
-    
-    
     - name: Instalar Google Cloud SDK
       ansible.builtin.apt:
         name: google-cloud-sdk
         state: present
-      when: "'google-cloud-sdk' not in ansible_facts.packages"
 
     - name: Autenticar Docker com o Google Artifact Registry
       ansible.builtin.command: "gcloud auth configure-docker {{ gcp_region }}-docker.pkg.dev --quiet"
